@@ -192,6 +192,13 @@ router.get('/health', (_req: http.IncomingMessage, res: http.ServerResponse) => 
   });
 });
 
+router.get('/favicon.ico', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  res.writeHead(204, {
+    'Cache-Control': 'public, max-age=86400',
+  });
+  res.end();
+});
+
 router.get('/notifications', (_req: http.IncomingMessage, res: http.ServerResponse) => {
   sendJson(res, 200, []);
 });

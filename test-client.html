@@ -2795,7 +2795,7 @@
     // --- DOM Elements ---
     const $ = (selector) => document.querySelector(selector);
     const pageHttpProtocol = location.protocol === 'https:' ? 'https:' : 'http:';
-    const CLIENT_BUILD = '20260311d';
+    const CLIENT_BUILD = '20260311e';
     const DEBUG_LOGS = false;
     const SOCKET_CONNECT_TIMEOUT_MS = 5000;
     const HEALTH_CHECK_TIMEOUT_MS = 1200;
@@ -4616,11 +4616,20 @@
     }
 
     function normalizeBase(base) {
-        return base.endsWith('/') ? base.slice(0, -1) : base;
+        if (!base) {
+            return base;
+        }
+        let normalized = base.endsWith('/') ? base.slice(0, -1) : base;
+        if (location.protocol === 'https:' && normalized.startsWith('http://')) {
+            normalized = `https://${normalized.slice('http://'.length)}`;
+        }
+        return normalized;
     }
 
     function ensureHttpBaseForApi() {
         if (activeHttpBase) {
+            activeHttpBase = normalizeBase(activeHttpBase);
+            activeSocketBase = activeSocketBase || activeHttpBase;
             return true;
         }
         const stored = getStoredBackend();
@@ -4657,7 +4666,11 @@
 
     function setStoredBackend(httpBase) {
         try {
-            localStorage.setItem(LAST_BACKEND_KEY, httpBase);
+            const normalized = normalizeBase(httpBase);
+            if (location.protocol === 'https:' && normalized.startsWith('http://')) {
+                return;
+            }
+            localStorage.setItem(LAST_BACKEND_KEY, normalized);
         } catch (_) {}
     }
 
