@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: betting-server
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        sync: false
+      - key: SEED_ADMIN_USERNAME
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_ADMIN_BALANCE
+        sync: false
+      - key: HOUSE_ADMIN_USERNAME
+        sync: false
+      - key: DB_FILE
+        value: /var/data/betting.db
+    disk:
+      name: betting-data
+      mountPath: /var/data
+      sizeGB: 1
