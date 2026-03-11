@@ -192,6 +192,10 @@ router.get('/health', (_req: http.IncomingMessage, res: http.ServerResponse) => 
   });
 });
 
+router.get('/notifications', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  sendJson(res, 200, []);
+});
+
 router.get('/test-client.html', (_req: http.IncomingMessage, res: http.ServerResponse) => {
   serveTestClient(res);
 });
