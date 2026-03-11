@@ -2795,7 +2795,7 @@
     // --- DOM Elements ---
     const $ = (selector) => document.querySelector(selector);
     const pageHttpProtocol = location.protocol === 'https:' ? 'https:' : 'http:';
-    const CLIENT_BUILD = '20260311b';
+    const CLIENT_BUILD = '20260311c';
     const DEBUG_LOGS = false;
     const SOCKET_CONNECT_TIMEOUT_MS = 5000;
     const HEALTH_CHECK_TIMEOUT_MS = 1200;
@@ -4624,7 +4624,7 @@
             return true;
         }
         const stored = getStoredBackend();
-        if (stored) {
+        if (stored && !(location.protocol === 'https:' && stored.startsWith('http://'))) {
             activeHttpBase = normalizeBase(stored);
             activeSocketBase = activeSocketBase || activeHttpBase;
             return true;
@@ -4661,6 +4661,9 @@
         const seen = new Set();
         const pushHttpBase = (base) => {
             if (!base) {
+                return;
+            }
+            if (location.protocol === 'https:' && base.startsWith('http://')) {
                 return;
             }
             const normalized = normalizeBase(base);
