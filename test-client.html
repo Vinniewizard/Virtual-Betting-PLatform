@@ -2795,7 +2795,7 @@
     // --- DOM Elements ---
     const $ = (selector) => document.querySelector(selector);
     const pageHttpProtocol = location.protocol === 'https:' ? 'https:' : 'http:';
-    const CLIENT_BUILD = '20260311e';
+    const CLIENT_BUILD = '20260311f';
     const DEBUG_LOGS = false;
     const SOCKET_CONNECT_TIMEOUT_MS = 5000;
     const HEALTH_CHECK_TIMEOUT_MS = 1200;
@@ -4699,6 +4699,10 @@
             pushHttpBase(location.origin);
         }
 
+        if (location.protocol === 'https:' && location.host) {
+            return candidates;
+        }
+
         const stored = getStoredBackend();
         if (stored) {
             pushHttpBase(stored);
@@ -5863,6 +5867,11 @@
     async function bootstrapRealtime() {
         SoundManager.init();
         debugLog(`Client build ${CLIENT_BUILD}`, 'info');
+        if (location.protocol === 'https:' && location.host) {
+            activeHttpBase = normalizeBase(location.origin);
+            activeSocketBase = activeHttpBase;
+            setStoredBackend(activeHttpBase);
+        }
         try {
             const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
             if (storedToken) {
