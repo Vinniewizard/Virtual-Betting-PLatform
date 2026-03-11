@@ -163,19 +163,7 @@ function sanitizeAutoPlayConfig(userId: string, payload: any, current: AutoPlayC
 // Initialize Router
 const router = Router();
 
-router.get('/', (_req: http.IncomingMessage, res: http.ServerResponse) => {
-  sendJson(res, 200, { name: 'Betting Server', version: '1.0.0', status: 'active' });
-});
-
-router.get('/health', (_req: http.IncomingMessage, res: http.ServerResponse) => {
-  sendJson(res, 200, {
-    status: 'ok',
-    uptimeSeconds: Math.floor(process.uptime()),
-    timestamp: Date.now(),
-  });
-});
-
-router.get('/test-client.html', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+const serveTestClient = (res: http.ServerResponse) => {
   const filePath = resolveAssetPath('test-client.html');
   fs.readFile(filePath, (err, data) => {
     if (err) {
@@ -190,6 +178,22 @@ router.get('/test-client.html', (_req: http.IncomingMessage, res: http.ServerRes
     });
     res.end(data);
   });
+};
+
+router.get('/', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  serveTestClient(res);
+});
+
+router.get('/health', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  sendJson(res, 200, {
+    status: 'ok',
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: Date.now(),
+  });
+});
+
+router.get('/test-client.html', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  serveTestClient(res);
 });
 
 router.get('/static/engine.io.js', (_req: http.IncomingMessage, res: http.ServerResponse) => {
