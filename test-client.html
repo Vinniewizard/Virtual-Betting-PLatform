@@ -2795,7 +2795,7 @@
     // --- DOM Elements ---
     const $ = (selector) => document.querySelector(selector);
     const pageHttpProtocol = location.protocol === 'https:' ? 'https:' : 'http:';
-    const CLIENT_BUILD = '20260311c';
+    const CLIENT_BUILD = '20260311d';
     const DEBUG_LOGS = false;
     const SOCKET_CONNECT_TIMEOUT_MS = 5000;
     const HEALTH_CHECK_TIMEOUT_MS = 1200;
@@ -4644,7 +4644,12 @@
 
     function getStoredBackend() {
         try {
-            return localStorage.getItem(LAST_BACKEND_KEY);
+            const stored = localStorage.getItem(LAST_BACKEND_KEY);
+            if (stored && location.protocol === 'https:' && stored.startsWith('http://')) {
+                localStorage.removeItem(LAST_BACKEND_KEY);
+                return null;
+            }
+            return stored;
         } catch (_) {
             return null;
         }
