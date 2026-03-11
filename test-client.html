@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Virtual Betting Platform</title>
-    <script src="/static/engine.io.js?v=20260311a"></script>
+    <script src="/static/engine.io.js?v=20260311g"></script>
     <!-- sound effects -->
     <audio id="snd-card" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=" preload="auto"></audio>
     <audio id="snd-win" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=" preload="auto"></audio>
@@ -2795,7 +2795,7 @@
     // --- DOM Elements ---
     const $ = (selector) => document.querySelector(selector);
     const pageHttpProtocol = location.protocol === 'https:' ? 'https:' : 'http:';
-    const CLIENT_BUILD = '20260311f';
+    const CLIENT_BUILD = '20260311g';
     const DEBUG_LOGS = false;
     const SOCKET_CONNECT_TIMEOUT_MS = 5000;
     const HEALTH_CHECK_TIMEOUT_MS = 1200;
@@ -5774,7 +5774,7 @@
         let currentSocket;
         try {
             currentSocket = shouldUseRelativeSocket
-                ? createRealtimeSocket('/', socketOptions)
+                ? createRealtimeSocket(location.origin, socketOptions)
                 : createRealtimeSocket(activeSocketBase, socketOptions);
         } catch (error) {
             log(`Socket init failed: ${error?.message || String(error)}`, 'error');
