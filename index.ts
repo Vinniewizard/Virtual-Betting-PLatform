@@ -237,6 +237,10 @@ const engine: any = new Server({
   cors: {
     origin: '*',
   },
+  transports: ['polling'],
+  allowUpgrades: false,
+  pingInterval: 25000,
+  pingTimeout: 60000,
 });
 engine.attach(server, { path: ENGINE_IO_PATH, addTrailingSlash: false });
 engine.on('connection_error', (err: any) => {
