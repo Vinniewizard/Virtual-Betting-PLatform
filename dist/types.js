@@ -1,0 +1,22 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GameType = void 0;
+var GameType;
+(function (GameType) {
+    GameType["AVIATOR"] = "aviator";
+    GameType["JETX"] = "jetx";
+    GameType["SPACEMAN"] = "spaceman";
+    GameType["CRASH"] = "crash";
+    GameType["BALLOON"] = "balloon";
+    GameType["DICE"] = "dice";
+    GameType["MINES"] = "mines";
+    GameType["PLINKO"] = "plinko";
+    GameType["HILO"] = "hilo";
+    GameType["ROULETTE"] = "roulette";
+    GameType["BLACKJACK"] = "blackjack";
+    GameType["BACCARAT"] = "baccarat";
+    GameType["TEEN_PATTI"] = "teen_patti";
+    GameType["TOWER"] = "tower";
+    GameType["DRAGON_TOWER"] = "dragon_tower";
+    GameType["TREASURE_HUNT"] = "treasure_hunt";
+})(GameType || (exports.GameType = GameType = {}));
