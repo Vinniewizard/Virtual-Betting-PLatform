@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Virtual Betting Platform</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23102445'/%3E%3Ctext x='50' y='62' font-size='56' text-anchor='middle' fill='%23ffffff' font-family='Arial'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
-    <script src="/static/engine.io.js?v=20260311g"></script>
+    <script src="/static/engine.io.js?v=20260311i"></script>
     <!-- sound effects -->
     <audio id="snd-card" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=" preload="auto"></audio>
     <audio id="snd-win" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=" preload="auto"></audio>
@@ -2796,7 +2796,10 @@
     // --- DOM Elements ---
     const $ = (selector) => document.querySelector(selector);
     const pageHttpProtocol = location.protocol === 'https:' ? 'https:' : 'http:';
-    const CLIENT_BUILD = '20260311h';
+    const CLIENT_BUILD = '20260311i';
+    const forceSecureOrigin = location.protocol === 'https:'
+        ? location.origin.replace('http:', 'https:')
+        : location.origin;
     const DEBUG_LOGS = false;
     const SOCKET_CONNECT_TIMEOUT_MS = 5000;
     const HEALTH_CHECK_TIMEOUT_MS = 1200;
@@ -4640,7 +4643,7 @@
             return true;
         }
         if (location.protocol !== 'file:' && location.host) {
-            activeHttpBase = normalizeBase(location.origin);
+            activeHttpBase = normalizeBase(forceSecureOrigin);
             activeSocketBase = activeSocketBase || activeHttpBase;
             return true;
         }
@@ -4697,7 +4700,7 @@
         };
 
         if (location.protocol !== 'file:' && location.host) {
-            pushHttpBase(location.origin);
+            pushHttpBase(forceSecureOrigin);
         }
 
         if (location.protocol === 'https:' && location.host) {
@@ -4773,7 +4776,7 @@
         if (location.protocol === 'file:' || !location.host) {
             return false;
         }
-        const candidate = normalizeBase(location.origin);
+        const candidate = normalizeBase(forceSecureOrigin);
         const ok = await probeBackend(candidate);
         if (!ok) {
             return false;
@@ -5771,11 +5774,11 @@
             withCredentials: false,
         };
         const shouldUseRelativeSocket = location.protocol !== 'file:' && location.host &&
-            normalizeBase(activeHttpBase) === normalizeBase(location.origin);
+            normalizeBase(activeHttpBase) === normalizeBase(forceSecureOrigin);
         let currentSocket;
         try {
             currentSocket = shouldUseRelativeSocket
-                ? createRealtimeSocket(location.origin, socketOptions)
+                ? createRealtimeSocket(forceSecureOrigin, socketOptions)
                 : createRealtimeSocket(activeSocketBase, socketOptions);
         } catch (error) {
             log(`Socket init failed: ${error?.message || String(error)}`, 'error');
@@ -5869,7 +5872,7 @@
         SoundManager.init();
         debugLog(`Client build ${CLIENT_BUILD}`, 'info');
         if (location.protocol === 'https:' && location.host) {
-            activeHttpBase = normalizeBase(location.origin);
+            activeHttpBase = normalizeBase(forceSecureOrigin);
             activeSocketBase = activeHttpBase;
             setStoredBackend(activeHttpBase);
         }
