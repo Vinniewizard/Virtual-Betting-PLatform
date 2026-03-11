@@ -3047,6 +3047,12 @@ crashGameTypes.forEach((gameType) => {
 // Socket event handling
 engine.on('connection', (socket: any) => {
   console.log(`Client connected: ${socket.id}`);
+  socket.on('close', (reason: any) => {
+    console.log(`Client disconnected: ${socket.id} reason=${reason}`);
+  });
+  socket.on('error', (err: any) => {
+    console.log(`Socket error: ${socket.id} ${err?.message || err}`);
+  });
 
   crashGameTypes.forEach((gameType) => {
     const game = getCrashGame(gameType);
