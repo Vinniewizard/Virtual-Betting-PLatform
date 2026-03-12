@@ -1,3 +1,11 @@
+// Prevent early exit: log uncaught exceptions and rejections
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason);
+});
+// ...existing code...
 /// <reference path="./declarations.d.ts" />
 import http from 'http';
 import fs from 'fs';
