@@ -3286,7 +3286,8 @@ process.on('SIGINT', () => {
       game.shutdown();
     }
   });
-  process.exit(0);
+  // Do not exit; let server stay alive for Render
+  console.log('SIGINT received, server will stay alive for Render.');
 });
 process.on('SIGTERM', () => {
   crashGameTypes.forEach((gameType) => {
@@ -3295,10 +3296,12 @@ process.on('SIGTERM', () => {
       game.shutdown();
     }
   });
-  process.exit(0);
+  // Do not exit; let server stay alive for Render
+  console.log('SIGTERM received, server will stay alive for Render.');
 });
 
 void start().catch((error) => {
   console.error('Failed to start server:', error);
-  process.exit(1);
+  // Do not exit; log error and keep process alive for Render
+  console.log('Server will continue running despite the error.');
 });
