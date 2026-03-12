@@ -2807,6 +2807,25 @@
     const SOCKET_RETRY_MAX_MS = 8000;
     const ENGINE_IO_PATHS = ['/engine.io'];
     const LAST_BACKEND_KEY = 'betting_server_last_backend';
+        // Default Render backend URL for production
+        const DEFAULT_RENDER_BACKEND = 'https://your-app.onrender.com'; // Replace with your actual Render URL
+
+        // Helper to check if running in production (Render)
+        function isProductionRender() {
+            return location.hostname.endsWith('.onrender.com');
+        }
+
+        // UI: Manual backend override (simple prompt)
+        window.setBackendUrl = function(url) {
+            if (url && typeof url === 'string') {
+                localStorage.setItem('betting_server_manual_backend', url);
+                location.reload();
+            }
+        };
+        // Example usage: open console and run setBackendUrl('https://your-app.onrender.com')
+    
+    
+    
     const AUTH_TOKEN_KEY = 'betting_server_auth_token';
     let socket = null;
     let reconnectAttempt = 0;
@@ -4699,19 +4718,25 @@
             });
         };
 
+        // Prefer Render backend in production
+        if (isProductionRender()) {
+            pushHttpBase(DEFAULT_RENDER_BACKEND);
+        }
+        // Manual override
+        const manualBackend = localStorage.getItem('betting_server_manual_backend');
+        if (manualBackend) {
+            pushHttpBase(manualBackend);
+        }
         if (location.protocol !== 'file:' && location.host) {
             pushHttpBase(forceSecureOrigin);
         }
-
         if (location.protocol === 'https:' && location.host) {
             return candidates;
         }
-
         const stored = getStoredBackend();
         if (stored) {
             pushHttpBase(stored);
         }
-
         const isLocalHost =
             location.hostname === '127.0.0.1' || location.hostname === 'localhost';
         const hosts = isLocalHost ? ['127.0.0.1', 'localhost'] : [];
@@ -4731,7 +4756,6 @@
                 });
             });
         }
-
         return candidates;
     }
 
