@@ -184,12 +184,34 @@ router.get('/', (_req: http.IncomingMessage, res: http.ServerResponse) => {
   serveTestClient(res);
 });
 
-router.get('/health', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+const sendHealth = (res: http.ServerResponse) => {
   sendJson(res, 200, {
     status: 'ok',
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: Date.now(),
   });
+};
+
+router.get('/health', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  sendHealth(res);
+});
+
+router.get('/health/', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  sendHealth(res);
+});
+
+router.get('/api/health', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  sendHealth(res);
+});
+
+router.head('/health', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  res.writeHead(200);
+  res.end();
+});
+
+router.head('/api/health', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  res.writeHead(200);
+  res.end();
 });
 
 router.get('/favicon.ico', (_req: http.IncomingMessage, res: http.ServerResponse) => {
