@@ -39,9 +39,6 @@ import {
   Tournament,
   TournamentParticipant,
 } from './types';
-import express from 'express';
-import bodyParser from 'body-parser';
-import { initiateMpesaDeposit, initiateMpesaWithdrawal } from './mpesa';
 
 function loadEnvFromFile(filePath: string): void {
   if (!fs.existsSync(filePath)) {
@@ -151,6 +148,54 @@ function sanitizeRiskSettings(next: Partial<RiskSettings>, current: RiskSettings
     gamePaused: typeof next.gamePaused === 'boolean' ? next.gamePaused : current.gamePaused,
   };
 }
+
+// --- Session & DB Stores ---
+const socketIdToUserId: Map<string, string> = new Map();
+const userIdToSocketId: Map<string, string> = new Map();
+const chatRateLimit: Map<string, number> = new Map();
+const autoPlayCache: Map<string, AutoPlayConfig> = new Map();
+const db = new DatabaseService();
+
+const LIPANA_API_KEY = process.env.LIPANA_API_KEY || '';
+const LIPANA_WEBHOOK_SECRET = process.env.LIPANA_WEBHOOK_SECRET || '';
+const lipana = new LipanaService(LIPANA_API_KEY);
+
+// Create HTTP Server
+const server = http.createServer((req, res) => {
+  if (req.url?.startsWith(ENGINE_IO_PATH)) {
+    return;
+  }
+  router(req, res, finalhandler(req, res));
+});
+
+// Initialize Engine.IO for real-time communication
+const engine: any = new Server({
+  cors: {
+    origin: '*',
+  },
+  transports: ['polling'],
+  allowUpgrades: false,
+  pingInterval: 25000,
+  pingTimeout: 60000,
+});
+engine.attach(server, { path: ENGINE_IO_PATH, addTrailingSlash: false });
+engine.on('connection_error', (err: any) => {
+  console.error('Engine.IO connection error:', {
+    code: err?.code,
+    message: err?.message,
+    context: err?.context,
+  });
+});
+
+// Initialize Game Engine
+const aviatorGame = new AviatorGame({ curve: 'linear', multiplierStep: 0.01, tickIntervalMs: 100, maxMultiplier: 1000 });
+const jetxGame = new AviatorGame({ curve: 'exp', expRate: 1.012, tickIntervalMs: 90, maxMultiplier: 500 });
+const spacemanGame = new AviatorGame({ curve: 'exp', expRate: 1.014, tickIntervalMs: 85, maxMultiplier: 350 });
+const crashGame = new AviatorGame({ curve: 'linear', multiplierStep: 0.012, tickIntervalMs: 95, maxMultiplier: 800 });
+const balloonGame = new AviatorGame({ curve: 'exp', expRate: 1.009, tickIntervalMs: 110, maxMultiplier: 200 });
+const diceGame = new DiceGame();
+let riskSettings: RiskSettings = sanitizeRiskSettings(db.getRiskSettings(DEFAULT_RISK_SETTINGS), DEFAULT_RISK_SETTINGS);
+
 
 function sanitizeAutoPlayConfig(userId: string, payload: any, current: AutoPlayConfig, risk: RiskSettings): AutoPlayConfig {
   const enabled = typeof payload?.enabled === 'boolean' ? payload.enabled : current.enabled;
@@ -400,53 +445,6 @@ router.post('/callback/mpesa', async (req: http.IncomingMessage, res: http.Serve
         sendJson(res, 500, { error: 'Internal server error' });
     }
 });
-
-// Create HTTP Server
-const server = http.createServer((req, res) => {
-  if (req.url?.startsWith(ENGINE_IO_PATH)) {
-    return;
-  }
-  router(req, res, finalhandler(req, res));
-});
-
-// Initialize Engine.IO for real-time communication
-const engine: any = new Server({
-  cors: {
-    origin: '*',
-  },
-  transports: ['polling'],
-  allowUpgrades: false,
-  pingInterval: 25000,
-  pingTimeout: 60000,
-});
-engine.attach(server, { path: ENGINE_IO_PATH, addTrailingSlash: false });
-engine.on('connection_error', (err: any) => {
-  console.error('Engine.IO connection error:', {
-    code: err?.code,
-    message: err?.message,
-    context: err?.context,
-  });
-});
-
-// --- Session & DB Stores ---
-const socketIdToUserId: Map<string, string> = new Map();
-const userIdToSocketId: Map<string, string> = new Map();
-const chatRateLimit: Map<string, number> = new Map();
-const autoPlayCache: Map<string, AutoPlayConfig> = new Map();
-const db = new DatabaseService();
-
-// Initialize Game Engine
-const aviatorGame = new AviatorGame({ curve: 'linear', multiplierStep: 0.01, tickIntervalMs: 100, maxMultiplier: 1000 });
-const jetxGame = new AviatorGame({ curve: 'exp', expRate: 1.012, tickIntervalMs: 90, maxMultiplier: 500 });
-const spacemanGame = new AviatorGame({ curve: 'exp', expRate: 1.014, tickIntervalMs: 85, maxMultiplier: 350 });
-const crashGame = new AviatorGame({ curve: 'linear', multiplierStep: 0.012, tickIntervalMs: 95, maxMultiplier: 800 });
-const balloonGame = new AviatorGame({ curve: 'exp', expRate: 1.009, tickIntervalMs: 110, maxMultiplier: 200 });
-const diceGame = new DiceGame();
-let riskSettings: RiskSettings = sanitizeRiskSettings(db.getRiskSettings(DEFAULT_RISK_SETTINGS), DEFAULT_RISK_SETTINGS);
-
-const LIPANA_API_KEY = process.env.LIPANA_API_KEY || '';
-const LIPANA_WEBHOOK_SECRET = process.env.LIPANA_WEBHOOK_SECRET || '';
-const lipana = new LipanaService(LIPANA_API_KEY);
 
 // Masked log for troubleshooting
 if (LIPANA_API_KEY) {
@@ -1879,7 +1877,8 @@ function handleBlackjackPlay(socket: any, payload: any): void {
     }
     if (user!.balance < amount) return sendError(socket, 'Insufficient funds.', 'INSUFFICIENT_FUNDS');
 
-    // deduct the
+    const newBalancePre = Number((user!.balance - amount).toFixed(2));
+    db.updateUserBalance(user!.id, newBalancePre);
 
     // start session with a single hand
     const playerCards = [drawCard(), drawCard()];
@@ -1900,11 +1899,6 @@ function handleBlackjackPlay(socket: any, payload: any): void {
 
     sendToSocket(socket, 'BLACKJACK_RESULT', {
         stage: 'initial',
-        isFinal: false,
-        hands: session.hands.map(h => ({ cards: h.cards.map(formatCard), total: getBlackjackTotal(h.cards), bet: h.betAmount, doubled: h.doubled, completed: h.completed })),
-        currentHand: session.currentHand,
-        dealerCards: dealerCards.map(formatCard),
-        dealerTotal,
         isFinal: false,
         hands: session.hands.map(h => ({ cards: h.cards.map(formatCard), total: getBlackjackTotal(h.cards), bet: h.betAmount, doubled: h.doubled, completed: h.completed })),
         currentHand: session.currentHand,
@@ -3450,7 +3444,7 @@ async function start(): Promise<void> {
   scheduleDailyLeaderboardReset();
   setInterval(manageTournaments, 15 * 1000); // Check tournaments every 15 seconds
   console.log(`Server listening on port ${PORT}...`);
-  server.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, () => {
     console.log(`Betting server is running on port ${PORT}`);
   });
 }
