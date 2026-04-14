@@ -3443,32 +3443,28 @@ async function start(): Promise<void> {
   console.log('Admin seeded, scheduling tasks...');
   scheduleDailyLeaderboardReset();
   setInterval(manageTournaments, 15 * 1000); // Check tournaments every 15 seconds
-  console.log(`Server listening on port ${PORT}...`);
-  server.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT} (0.0.0.0)...`);
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Betting server is running on port ${PORT}`);
   });
 }
 
-process.on('SIGINT', () => {
+function gracefulShutdown(signal: string) {
+  console.log(`${signal} received. Starting graceful shutdown...`);
   crashGameTypes.forEach((gameType) => {
     const game = getCrashGame(gameType);
     if (game) {
       game.shutdown();
     }
   });
-  // Do not exit; let server stay alive for Render
-  console.log('SIGINT received, server will stay alive for Render.');
-});
-process.on('SIGTERM', () => {
-  crashGameTypes.forEach((gameType) => {
-    const game = getCrashGame(gameType);
-    if (game) {
-      game.shutdown();
-    }
+  server.close(() => {
+    console.log('HTTP server closed.');
+    process.exit(0);
   });
-  // Do not exit; let server stay alive for Render
-  console.log('SIGTERM received, server will stay alive for Render.');
-});
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 void start().catch((error) => {
   console.error('Failed to start server:', error);
