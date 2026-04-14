@@ -5,12 +5,13 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection:', reason);
 });
-// ...existing code...
-/// <reference path="./declarations.d.ts" />
+/// <reference path="./types/declarations.d.ts" />
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+// @ts-ignore
 import Router from 'router';
+// @ts-ignore
 import finalhandler from 'finalhandler';
 import { Server } from 'engine.io';
 import crypto from 'crypto';
@@ -18,6 +19,7 @@ import { URL } from 'url';
 import jwt, { verify } from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { DatabaseService } from './database';
+import { LipanaService } from './lipanaService';
 import { AviatorGame, DiceGame, MinesGameLogic, PlinkoGameLogic, HiloGameLogic, RouletteGame } from './game';
 import {
   User,
@@ -37,6 +39,9 @@ import {
   Tournament,
   TournamentParticipant,
 } from './types';
+import express from 'express';
+import bodyParser from 'body-parser';
+import { initiateMpesaDeposit, initiateMpesaWithdrawal } from './mpesa';
 
 function loadEnvFromFile(filePath: string): void {
   if (!fs.existsSync(filePath)) {
@@ -113,10 +118,12 @@ const resolveAssetPath = (...segments: string[]): string => {
 };
 
 function parseAmount(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  if (value === null || value === undefined) return null;
+  const num = typeof value === 'number' ? value : parseFloat(String(value));
+  if (!Number.isFinite(num)) {
     return null;
   }
-  return Number(value.toFixed(2));
+  return Number(num.toFixed(2));
 }
 
 function parseBoolean(value: unknown, fallback = false): boolean {
@@ -189,7 +196,7 @@ const serveTestClient = (res: http.ServerResponse) => {
 };
 
 router.get('/', (_req: http.IncomingMessage, res: http.ServerResponse) => {
-  serveTestClient(res);
+  sendJson(res, 200, { name: 'Betting Server' });
 });
 
 const sendHealth = (res: http.ServerResponse) => {
@@ -254,6 +261,146 @@ router.get('/static/engine.io.js', (_req: http.IncomingMessage, res: http.Server
   });
 });
 
+// --- M-Pesa Transactions ---
+
+router.post('/deposit/mpesa', (req: AuthenticatedRequest, res: http.ServerResponse) => {
+    authenticateToken(req, res, async () => {
+        try {
+            const body = await getJsonBody(req);
+            const amount = parseAmount(body.amount);
+            
+            // Use stored phone number if not in body
+            const user = db.findUserById(req.user!.id);
+            const phoneNumber = body.phoneNumber || body.phone || user?.phoneNumber;
+
+            if (!amount || amount < 10) {
+                return sendJson(res, 400, { error: 'Invalid amount. Minimum is 10 KES.' });
+            }
+            if (!phoneNumber) {
+                return sendJson(res, 400, { error: 'No registered phone number found. Please update your profile.' });
+            }
+
+            console.log(`[M-Pesa Deposit] Attempting STK Push for User ${req.user!.id}, Phone: ${phoneNumber}, Amount: ${amount}`);
+            const result = await lipana.initiateStkPush(phoneNumber, amount);
+            if (result.success) {
+                console.log(`[M-Pesa Deposit] STK Push SUCCESS: ${result.transactionId || result.checkoutRequestID}`);
+                // Create a pending transaction
+                db.deposit(req.user!.id, amount, { 
+                    status: 'pending', 
+                    externalId: result.transactionId || result.checkoutRequestID 
+                });
+                sendJson(res, 200, { message: 'STK Push initiated. Please check your phone.', transactionId: result.transactionId });
+            } else {
+                console.error(`[M-Pesa Deposit] STK Push FAILED: ${result.message}`);
+                sendJson(res, 500, { error: result.message });
+            }
+        } catch (err: any) {
+            console.error(`[M-Pesa Deposit] Internal Error: ${err.message}`);
+            sendJson(res, 500, { error: 'Failed to initiate deposit.' });
+        }
+    });
+});
+
+router.post('/withdraw/mpesa', (req: AuthenticatedRequest, res: http.ServerResponse) => {
+    authenticateToken(req, res, async () => {
+        try {
+            const body = await getJsonBody(req);
+            const amount = parseAmount(body.amount);
+            
+            const user = db.findUserById(req.user!.id);
+            const phoneNumber = body.phoneNumber || body.phone || user?.phoneNumber;
+
+            if (!amount || amount <= 0) {
+                return sendJson(res, 400, { error: 'Invalid amount.' });
+            }
+            if (!phoneNumber) {
+                return sendJson(res, 400, { error: 'No registered phone number found. Please update your profile.' });
+            }
+
+            if (!user || user.balance < amount) {
+                return sendJson(res, 400, { error: 'Insufficient balance.' });
+            }
+
+            console.log(`[M-Pesa Withdrawal] Attempting Payout for User ${req.user!.id}, Phone: ${phoneNumber}, Amount: ${amount}`);
+            const result = await lipana.requestPayout(phoneNumber, amount);
+            if (result.success) {
+                console.log(`[M-Pesa Withdrawal] Payout SUCCESS: ${result.transactionId}`);
+                // Create a pending withdrawal
+                db.withdraw(req.user!.id, amount, { 
+                    status: 'pending', 
+                    externalId: result.transactionId 
+                });
+                sendJson(res, 200, { message: 'Withdrawal request submitted.', transactionId: result.transactionId });
+            } else {
+                console.error(`[M-Pesa Withdrawal] Payout FAILED: ${result.message}`);
+                sendJson(res, 500, { error: result.message });
+            }
+        } catch (err: any) {
+            console.error(`[M-Pesa Withdrawal] Internal Error: ${err.message}`);
+            sendJson(res, 500, { error: 'Failed to initiate withdrawal.' });
+        }
+    });
+});
+
+router.post('/callback/mpesa', async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    try {
+        const signature = req.headers['x-lipana-signature'] as string;
+        const bodyRaw = await new Promise<string>((resolve) => {
+            let data = '';
+            req.on('data', chunk => data += chunk);
+            req.on('end', () => resolve(data));
+        });
+
+        if (LIPANA_WEBHOOK_SECRET && !lipana.verifyWebhookSignature(bodyRaw, signature, LIPANA_WEBHOOK_SECRET)) {
+            console.warn('Invalid Lipana webhook signature detected.');
+            return sendJson(res, 401, { error: 'Invalid signature' });
+        }
+
+        const payload = JSON.parse(bodyRaw);
+        console.log('Lipana Webhook received:', payload);
+
+        const { event, data } = payload;
+        const externalId = data.transactionId || data.checkoutRequestID;
+        
+        if (externalId) {
+            const transaction = db.findTransactionByExternalId(externalId);
+            if (transaction && transaction.status === 'pending') {
+                let statusText = '';
+                let isSuccess = false;
+
+                if (event === 'payment.success' || event === 'payout.success') {
+                    db.updateTransactionStatus(transaction.id, 'success');
+                    statusText = 'successful';
+                    isSuccess = true;
+                    console.log(`Transaction ${transaction.id} marked as SUCCESS (Lipana ID: ${externalId})`);
+                } else if (event.endsWith('.failed') || event.endsWith('.cancelled')) {
+                    db.updateTransactionStatus(transaction.id, 'failed');
+                    statusText = 'failed';
+                    isSuccess = false;
+                    console.log(`Transaction ${transaction.id} marked as FAILED (Lipana ID: ${externalId})`);
+                }
+
+                if (statusText) {
+                    // Notify user if online
+                    const socketId = userIdToSocketId.get(transaction.userId);
+                    if (socketId && engine.clients[socketId]) {
+                        const user = db.findUserById(transaction.userId);
+                        sendToSocket(engine.clients[socketId], 'BALANCE_UPDATE', { 
+                            balance: user?.balance,
+                            message: `M-Pesa ${transaction.type} of ${transaction.amount} was ${statusText}!`
+                        });
+                    }
+                }
+            }
+        }
+
+        sendJson(res, 200, { received: true });
+    } catch (err) {
+        console.error('Error processing Lipana webhook:', err);
+        sendJson(res, 500, { error: 'Internal server error' });
+    }
+});
+
 // Create HTTP Server
 const server = http.createServer((req, res) => {
   if (req.url?.startsWith(ENGINE_IO_PATH)) {
@@ -296,6 +443,26 @@ const crashGame = new AviatorGame({ curve: 'linear', multiplierStep: 0.012, tick
 const balloonGame = new AviatorGame({ curve: 'exp', expRate: 1.009, tickIntervalMs: 110, maxMultiplier: 200 });
 const diceGame = new DiceGame();
 let riskSettings: RiskSettings = sanitizeRiskSettings(db.getRiskSettings(DEFAULT_RISK_SETTINGS), DEFAULT_RISK_SETTINGS);
+
+const LIPANA_API_KEY = process.env.LIPANA_API_KEY || '';
+const LIPANA_WEBHOOK_SECRET = process.env.LIPANA_WEBHOOK_SECRET || '';
+const lipana = new LipanaService(LIPANA_API_KEY);
+
+// Masked log for troubleshooting
+if (LIPANA_API_KEY) {
+    const masked = LIPANA_API_KEY.slice(0, 12) + '...' + LIPANA_API_KEY.slice(-8);
+    console.log(`[Startup] Lipana API Key loaded: ${masked}`);
+} else {
+    console.warn('[Startup] WARNING: LIPANA_API_KEY is not set in environment.');
+}
+
+function validateSingleGameSession(socket: any, userId: string): boolean {
+    if (db.hasAnyActiveGame(userId)) {
+        sendError(socket, 'You already have an active game session. Complete it before starting a new one.', 'CONCURRENT_GAME_DENIED');
+        return false;
+    }
+    return true;
+}
 db.setRiskSettings(riskSettings);
 
 const crashGameTypes: GameType[] = [
@@ -1265,6 +1432,8 @@ function handlePlaceBet(socket: any, payload: any): void {
     return;
   }
 
+  if (!validateSingleGameSession(socket, user!.id)) return;
+
   const amount = parseAmount(payload?.amount);
   if (amount === null) {
     return sendError(socket, 'Invalid bet amount.', 'INVALID_AMOUNT');
@@ -1285,6 +1454,8 @@ function handlePlaceDiceBet(socket: any, payload: any): void {
     const user = getUserBySocket(socket);
     if (!enforceRuntimeAccess(socket, user)) return;
 
+    if (!validateSingleGameSession(socket, user!.id)) return;
+
     const amount = parseAmount(payload?.amount);
     const condition = payload?.condition;
     const target = Number(payload?.target);
@@ -1304,6 +1475,8 @@ function handlePlaceDiceBet(socket: any, payload: any): void {
 function handleMinesStartGame(socket: any, payload: any): void {
     const user = getUserBySocket(socket);
     if (!enforceRuntimeAccess(socket, user)) return;
+
+    if (!validateSingleGameSession(socket, user!.id)) return;
 
     const amount = parseAmount(payload?.amount);
     const mineCount = Number(payload?.mineCount);
@@ -1476,6 +1649,8 @@ function handleHiloStartGame(socket: any, payload: any): void {
     const user = getUserBySocket(socket);
     if (!enforceRuntimeAccess(socket, user)) return;
 
+    if (!validateSingleGameSession(socket, user!.id)) return;
+
     const amount = parseAmount(payload?.amount);
     if (amount === null || amount <= 0) return sendError(socket, 'Invalid amount.', 'INVALID_AMOUNT');
     if (user!.balance < amount) return sendError(socket, 'Insufficient funds.', 'INSUFFICIENT_FUNDS');
@@ -1590,6 +1765,8 @@ function handlePlaceRouletteBet(socket: any, payload: any): void {
     const user = getUserBySocket(socket);
     if (!enforceRuntimeAccess(socket, user)) return;
 
+    if (!validateSingleGameSession(socket, user!.id)) return;
+
     const { amount, betType, betValue } = payload;
 
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -1702,9 +1879,7 @@ function handleBlackjackPlay(socket: any, payload: any): void {
     }
     if (user!.balance < amount) return sendError(socket, 'Insufficient funds.', 'INSUFFICIENT_FUNDS');
 
-    // deduct the initial stake
-    let newBalancePre = Number((user!.balance - amount).toFixed(2));
-    db.updateUserBalance(user!.id, newBalancePre);
+    // deduct the
 
     // start session with a single hand
     const playerCards = [drawCard(), drawCard()];
@@ -1725,6 +1900,11 @@ function handleBlackjackPlay(socket: any, payload: any): void {
 
     sendToSocket(socket, 'BLACKJACK_RESULT', {
         stage: 'initial',
+        isFinal: false,
+        hands: session.hands.map(h => ({ cards: h.cards.map(formatCard), total: getBlackjackTotal(h.cards), bet: h.betAmount, doubled: h.doubled, completed: h.completed })),
+        currentHand: session.currentHand,
+        dealerCards: dealerCards.map(formatCard),
+        dealerTotal,
         isFinal: false,
         hands: session.hands.map(h => ({ cards: h.cards.map(formatCard), total: getBlackjackTotal(h.cards), bet: h.betAmount, doubled: h.doubled, completed: h.completed })),
         currentHand: session.currentHand,
@@ -2512,11 +2692,6 @@ router.get('/fairness/current', (req: http.IncomingMessage, res: http.ServerResp
 router.get('/risk-settings', (_req: http.IncomingMessage, res: http.ServerResponse) => {
   sendJson(res, 200, riskSettings);
 });
-
-router.get('/admin/users', authenticateAdmin, (_req: AuthenticatedRequest, res: http.ServerResponse) => {
-  sendJson(res, 200, db.getAllUsers());
-});
-
 router.get('/admin/house-summary', authenticateAdmin, (_req: AuthenticatedRequest, res: http.ServerResponse) => {
   const houseAdmin = resolveHouseAdmin();
   sendJson(res, 200, {
@@ -3224,9 +3399,10 @@ engine.on('connection', (socket: any) => {
   socket.on('close', () => {
     const userId = socketIdToUserId.get(socket.id);
     if (userId) {
+      db.disableAutoPlayForUser(userId);
       socketIdToUserId.delete(socket.id);
       userIdToSocketId.delete(userId);
-      console.log(`User with ID ${userId} disconnected.`);
+      console.log(`User with ID ${userId} disconnected. Auto-bet disabled.`);
     }
     console.log(`Client disconnected: ${socket.id}`);
   });
@@ -3274,7 +3450,7 @@ async function start(): Promise<void> {
   scheduleDailyLeaderboardReset();
   setInterval(manageTournaments, 15 * 1000); // Check tournaments every 15 seconds
   console.log(`Server listening on port ${PORT}...`);
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Betting server is running on port ${PORT}`);
   });
 }
