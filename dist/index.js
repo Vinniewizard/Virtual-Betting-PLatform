@@ -3,6 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+// Prevent early exit: log uncaught exceptions and rejections
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection:', reason);
+});
+// ...existing code...
 /// <reference path="./declarations.d.ts" />
 const http_1 = __importDefault(require("http"));
 const fs_1 = __importDefault(require("fs"));
@@ -130,17 +138,7 @@ function sanitizeAutoPlayConfig(userId, payload, current, risk) {
 }
 // Initialize Router
 const router = (0, router_1.default)();
-router.get('/', (_req, res) => {
-    sendJson(res, 200, { name: 'Betting Server', version: '1.0.0', status: 'active' });
-});
-router.get('/health', (_req, res) => {
-    sendJson(res, 200, {
-        status: 'ok',
-        uptimeSeconds: Math.floor(process.uptime()),
-        timestamp: Date.now(),
-    });
-});
-router.get('/test-client.html', (_req, res) => {
+const serveTestClient = (res) => {
     const filePath = resolveAssetPath('test-client.html');
     fs_1.default.readFile(filePath, (err, data) => {
         if (err) {
@@ -155,6 +153,45 @@ router.get('/test-client.html', (_req, res) => {
         });
         res.end(data);
     });
+};
+router.get('/', (_req, res) => {
+    serveTestClient(res);
+});
+const sendHealth = (res) => {
+    sendJson(res, 200, {
+        status: 'ok',
+        uptimeSeconds: Math.floor(process.uptime()),
+        timestamp: Date.now(),
+    });
+};
+router.get('/health', (_req, res) => {
+    sendHealth(res);
+});
+router.get('/health/', (_req, res) => {
+    sendHealth(res);
+});
+router.get('/api/health', (_req, res) => {
+    sendHealth(res);
+});
+router.head('/health', (_req, res) => {
+    res.writeHead(200);
+    res.end();
+});
+router.head('/api/health', (_req, res) => {
+    res.writeHead(200);
+    res.end();
+});
+router.get('/favicon.ico', (_req, res) => {
+    res.writeHead(204, {
+        'Cache-Control': 'public, max-age=86400',
+    });
+    res.end();
+});
+router.get('/notifications', (_req, res) => {
+    sendJson(res, 200, []);
+});
+router.get('/test-client.html', (_req, res) => {
+    serveTestClient(res);
 });
 router.get('/static/engine.io.js', (_req, res) => {
     const filePath = resolveAssetPath('node_modules', 'engine.io-client', 'dist', 'engine.io.js');
@@ -185,8 +222,12 @@ const engine = new engine_io_1.Server({
     cors: {
         origin: '*',
     },
+    transports: ['polling'],
+    allowUpgrades: false,
+    pingInterval: 25000,
+    pingTimeout: 60000,
 });
-engine.attach(server, { path: ENGINE_IO_PATH, addTrailingSlash: true });
+engine.attach(server, { path: ENGINE_IO_PATH, addTrailingSlash: false });
 engine.on('connection_error', (err) => {
     console.error('Engine.IO connection error:', {
         code: err === null || err === void 0 ? void 0 : err.code,
@@ -2678,6 +2719,12 @@ crashGameTypes.forEach((gameType) => {
 // Socket event handling
 engine.on('connection', (socket) => {
     console.log(`Client connected: ${socket.id}`);
+    socket.on('close', (reason) => {
+        console.log(`Client disconnected: ${socket.id} reason=${reason}`);
+    });
+    socket.on('error', (err) => {
+        console.log(`Socket error: ${socket.id} ${(err === null || err === void 0 ? void 0 : err.message) || err}`);
+    });
     crashGameTypes.forEach((gameType) => {
         const game = getCrashGame(gameType);
         if (game) {
@@ -2870,7 +2917,8 @@ process.on('SIGINT', () => {
             game.shutdown();
         }
     });
-    process.exit(0);
+    // Do not exit; let server stay alive for Render
+    console.log('SIGINT received, server will stay alive for Render.');
 });
 process.on('SIGTERM', () => {
     crashGameTypes.forEach((gameType) => {
@@ -2879,9 +2927,11 @@ process.on('SIGTERM', () => {
             game.shutdown();
         }
     });
-    process.exit(0);
+    // Do not exit; let server stay alive for Render
+    console.log('SIGTERM received, server will stay alive for Render.');
 });
 void start().catch((error) => {
     console.error('Failed to start server:', error);
-    process.exit(1);
+    // Do not exit; log error and keep process alive for Render
+    console.log('Server will continue running despite the error.');
 });

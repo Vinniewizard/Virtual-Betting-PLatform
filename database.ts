@@ -54,6 +54,8 @@ function rowToTransaction(row: Record<string, any>): Transaction {
         userId: row.userId,
         type: row.type as any,
         amount: row.amount,
+        status: (row.status as any) || 'success', // Default to success for old transactions
+        externalId: row.externalId,
         timestamp: row.timestamp,
     };
 }
@@ -247,6 +249,13 @@ export class DatabaseService {
     private clearDailyLeaderboardStmt!: StatementSync;
     private getActiveHiloGameForUserStmt!: StatementSync;
     private updateHiloGameStmt!: StatementSync;
+    private hasAnyActiveBetStmt!: StatementSync;
+    private hasAnyActiveMinesGameStmt!: StatementSync;
+    private hasAnyActiveHiloGameStmt!: StatementSync;
+    private disableAutoPlayStmt!: StatementSync;
+    private updateTransactionStatusStmt!: StatementSync;
+    private findTransactionByExternalIdStmt!: StatementSync;
+    private findTransactionByIdStmt!: StatementSync;
 
     constructor() {
         const dbFile = process.env.DB_FILE || 'betting.db';
@@ -294,6 +303,8 @@ export class DatabaseService {
                 userId TEXT NOT NULL,
                 type TEXT NOT NULL,
                 amount REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'success',
+                externalId TEXT,
                 timestamp INTEGER NOT NULL,
                 FOREIGN KEY(userId) REFERENCES users(id)
             );
@@ -471,6 +482,9 @@ export class DatabaseService {
         addColumn('users', 'lastDailyBonus', 'INTEGER');
         addColumn('users', 'recoveryKey', 'TEXT');
 
+        addColumn('transactions', 'status', "TEXT NOT NULL DEFAULT 'success'");
+        addColumn('transactions', 'externalId', 'TEXT');
+
         console.log('Database schema initialized.');
     }
 
@@ -489,7 +503,7 @@ export class DatabaseService {
         this.getLeaderboardStmt = this.db.prepare('SELECT username, balance FROM users ORDER BY balance DESC LIMIT ?');
         this.depositStmt = this.db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?');
         this.withdrawStmt = this.db.prepare('UPDATE users SET balance = balance - ? WHERE id = ?');
-        this.createTransactionStmt = this.db.prepare('INSERT INTO transactions (id, userId, type, amount, timestamp) VALUES (?, ?, ?, ?, ?)');
+        this.createTransactionStmt = this.db.prepare('INSERT INTO transactions (id, userId, type, amount, status, externalId, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)');
         this.getTransactionsForUserPaginatedStmt = this.db.prepare('SELECT * FROM transactions WHERE userId = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?');
         this.countTransactionsForUserStmt = this.db.prepare('SELECT COUNT(*) as count FROM transactions WHERE userId = ?');
         this.getAllUsersStmt = this.db.prepare('SELECT id, username, balance, role, status FROM users');
@@ -570,6 +584,13 @@ export class DatabaseService {
         this.createHiloGameStmt = this.db.prepare('INSERT OR REPLACE INTO hilo_games (id, userId, betId, betAmount, deck, history, isOver, payoutMultiplier, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         this.getActiveHiloGameForUserStmt = this.db.prepare('SELECT * FROM hilo_games WHERE userId = ? AND isOver = 0');
         this.updateHiloGameStmt = this.db.prepare('UPDATE hilo_games SET deck = ?, history = ?, isOver = ?, payoutMultiplier = ?, updatedAt = ? WHERE id = ?');
+        this.hasAnyActiveBetStmt = this.db.prepare("SELECT 1 FROM bets WHERE userId = ? AND status = 'active' LIMIT 1");
+        this.hasAnyActiveMinesGameStmt = this.db.prepare("SELECT 1 FROM mines_games WHERE userId = ? AND isOver = 0 LIMIT 1");
+        this.hasAnyActiveHiloGameStmt = this.db.prepare("SELECT 1 FROM hilo_games WHERE userId = ? AND isOver = 0 LIMIT 1");
+        this.disableAutoPlayStmt = this.db.prepare("UPDATE autoplay_configs SET enabled = 0, updatedAt = ? WHERE userId = ?");
+        this.updateTransactionStatusStmt = this.db.prepare("UPDATE transactions SET status = ? WHERE id = ?");
+        this.findTransactionByExternalIdStmt = this.db.prepare("SELECT * FROM transactions WHERE externalId = ?");
+        this.findTransactionByIdStmt = this.db.prepare("SELECT * FROM transactions WHERE id = ?");
     }
 
     public findUserByUsername = (username: string): User | null => {
@@ -690,14 +711,50 @@ export class DatabaseService {
         this.updateUserStatusStmt.run(status, userId);
     };
 
-    public deposit = (userId: string, amount: number): void => {
-        this.depositStmt.run(amount, userId);
-        this.createTransactionStmt.run(crypto.randomUUID(), userId, 'deposit', amount, Date.now());
+    public deposit = (userId: string, amount: number, opts?: { externalId?: string; status?: 'pending' | 'success' }): void => {
+        const status = opts?.status || 'success';
+        if (status === 'success') {
+            this.depositStmt.run(amount, userId);
+        }
+        this.createTransactionStmt.run(crypto.randomUUID(), userId, 'deposit', amount, status, opts?.externalId || null, Date.now());
     };
 
-    public withdraw = (userId: string, amount: number): void => {
+    public withdraw = (userId: string, amount: number, opts?: { externalId?: string; status?: 'pending' | 'success' }): void => {
+        const status = opts?.status || 'success';
+        // Always deduct for withdrawal to prevent double spending
         this.withdrawStmt.run(amount, userId);
-        this.createTransactionStmt.run(crypto.randomUUID(), userId, 'withdrawal', amount, Date.now());
+        this.createTransactionStmt.run(crypto.randomUUID(), userId, 'withdrawal', amount, status, opts?.externalId || null, Date.now());
+    };
+
+    public updateTransactionStatus = (transactionId: string, status: 'success' | 'failed'): void => {
+        const tx = this.findTransactionById(transactionId);
+        if (!tx || tx.status !== 'pending') return;
+
+        if (status === 'success') {
+            if (tx.type === 'deposit') {
+                // For deposit, we only update balance on success
+                this.depositStmt.run(tx.amount, tx.userId);
+            }
+            // For withdrawal, balance was already deducted on creation
+        } else if (status === 'failed') {
+            if (tx.type === 'withdrawal') {
+                // If withdrawal failed, refund the user
+                this.depositStmt.run(tx.amount, tx.userId);
+            }
+            // For deposit, nothing to do on failure
+        }
+        
+        this.updateTransactionStatusStmt.run(status, transactionId);
+    };
+
+    public findTransactionById = (id: string): Transaction | null => {
+        const row = this.findTransactionByIdStmt.get(id);
+        return row ? rowToTransaction(row as Record<string, any>) : null;
+    };
+
+    public findTransactionByExternalId = (externalId: string): Transaction | null => {
+        const row = this.findTransactionByExternalIdStmt.get(externalId);
+        return row ? rowToTransaction(row as Record<string, any>) : null;
     };
 
     public markActiveBetsAsLost(gameId: string): Bet[] {
@@ -1037,5 +1094,22 @@ export class DatabaseService {
 
     public clearDailyLeaderboard = (): void => {
         this.clearDailyLeaderboardStmt.run();
+    };
+
+    public hasAnyActiveGame = (userId: string): boolean => {
+        const hasBet = !!this.hasAnyActiveBetStmt.get(userId);
+        if (hasBet) return true;
+        
+        const hasMines = !!this.hasAnyActiveMinesGameStmt.get(userId);
+        if (hasMines) return true;
+        
+        const hasHilo = !!this.hasAnyActiveHiloGameStmt.get(userId);
+        if (hasHilo) return true;
+        
+        return false;
+    };
+
+    public disableAutoPlayForUser = (userId: string): void => {
+        this.disableAutoPlayStmt.run(Date.now(), userId);
     };
 }

@@ -69,6 +69,8 @@ export interface Transaction {
   userId: string;
   type: 'deposit' | 'withdrawal';
   amount: number;
+  status: 'pending' | 'success' | 'failed';
+  externalId?: string;
   timestamp: number;
 }
 
