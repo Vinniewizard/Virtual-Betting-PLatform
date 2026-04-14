@@ -241,7 +241,19 @@ const serveTestClient = (res: http.ServerResponse) => {
 };
 
 router.get('/', (_req: http.IncomingMessage, res: http.ServerResponse) => {
-  sendJson(res, 200, { name: 'Betting Server' });
+  const filePath = resolveAssetPath('test-client.html');
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      sendJson(res, 500, { error: 'Failed to load interface' });
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(data);
+  });
+});
+
+router.get('/api/status', (_req: http.IncomingMessage, res: http.ServerResponse) => {
+  sendJson(res, 200, { name: 'Betting Server', status: 'online' });
 });
 
 const sendHealth = (res: http.ServerResponse) => {
