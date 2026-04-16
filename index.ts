@@ -183,6 +183,134 @@ const db = new DatabaseService();
 const LIPANA_API_KEY = process.env.LIPANA_API_KEY || '';
 const LIPANA_WEBHOOK_SECRET = process.env.LIPANA_WEBHOOK_SECRET || '';
 const lipana = new LipanaService(LIPANA_API_KEY);
+type MpesaProvider = 'daraja' | 'lipana';
+const MPESA_PROVIDER: MpesaProvider = (process.env.MPESA_PROVIDER || (LIPANA_API_KEY ? 'lipana' : 'daraja')).toLowerCase() === 'daraja'
+  ? 'daraja'
+  : 'lipana';
+
+const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
+
+function resolveRequestProtocol(req: http.IncomingMessage): string {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  if (typeof forwardedProto === 'string' && forwardedProto.trim()) {
+    return forwardedProto.split(',')[0].trim();
+  }
+  return (req.socket as any)?.encrypted ? 'https' : 'http';
+}
+
+function resolvePublicBaseUrl(req: http.IncomingMessage): string {
+  const configuredBase = firstNonEmptyString(
+    process.env.PUBLIC_BASE_URL,
+    process.env.APP_BASE_URL,
+    process.env.BASE_URL,
+  );
+  if (configuredBase) {
+    return trimTrailingSlash(configuredBase);
+  }
+
+  const host = firstNonEmptyString(req.headers['x-forwarded-host'], req.headers.host);
+  return host ? `${resolveRequestProtocol(req)}://${host}` : '';
+}
+
+function buildCallbackUrl(req: http.IncomingMessage, routePath: string): string {
+  const baseUrl = resolvePublicBaseUrl(req);
+  return baseUrl ? `${baseUrl}${routePath}` : routePath;
+}
+
+function settlePendingTransactionByExternalId(
+  externalId: string,
+  status: 'success' | 'failed',
+  messageBuilder?: (args: { amount: number; transactionType: 'deposit' | 'withdrawal' }) => string,
+): boolean {
+  const transaction = db.findTransactionByExternalId(externalId);
+  if (!transaction || transaction.status !== 'pending') {
+    return false;
+  }
+
+  const transactionType = transaction.type === 'withdrawal' ? 'withdrawal' : 'deposit';
+  db.updateTransactionStatus(transaction.id, status);
+  sendBalanceUpdate(transaction.userId, {
+    message: messageBuilder
+      ? messageBuilder({ amount: transaction.amount, transactionType })
+      : `${transactionType === 'deposit' ? 'Deposit' : 'Withdrawal'} ${status}.`,
+    status,
+    transactionType,
+    externalId,
+    amount: transaction.amount,
+  });
+  return true;
+}
+
+function handleLipanaWebhook(bodyRaw: string, req: http.IncomingMessage, res: http.ServerResponse): boolean {
+  const signatureHeader = typeof req.headers['x-lipana-signature'] === 'string'
+    ? req.headers['x-lipana-signature']
+    : '';
+
+  if (LIPANA_WEBHOOK_SECRET) {
+    if (!signatureHeader || !lipana.verifyWebhookSignature(bodyRaw, signatureHeader, LIPANA_WEBHOOK_SECRET)) {
+      sendJson(res, 401, { error: 'Invalid Lipana signature' });
+      return true;
+    }
+  }
+
+  let payload: any;
+  try {
+    payload = bodyRaw ? JSON.parse(bodyRaw) : {};
+  } catch {
+    return false;
+  }
+
+  const eventName = firstNonEmptyString(payload?.event, payload?.type, payload?.data?.event);
+  const data = payload?.data || payload;
+  const normalizedEvent = (eventName || '').toLowerCase();
+  const normalizedStatus = firstNonEmptyString(data?.status, payload?.status)?.toLowerCase() || '';
+  const externalId = firstNonEmptyString(
+    data?.transactionId,
+    data?.checkoutRequestID,
+    data?.checkoutRequestId,
+    data?.ConversationID,
+    data?.conversationId,
+    payload?.transactionId,
+    payload?.checkoutRequestID,
+    payload?.ConversationID,
+  );
+
+  const isWithdrawal = normalizedEvent.includes('payout')
+    || normalizedEvent.includes('withdraw')
+    || normalizedStatus.includes('withdraw');
+  const isSuccess = /(success|completed|paid)/.test(normalizedEvent) || /(success|completed|paid)/.test(normalizedStatus);
+  const isFailure = /(failed|cancel|declin|timeout|error|revers)/.test(normalizedEvent)
+    || /(failed|cancel|declin|timeout|error|revers)/.test(normalizedStatus);
+  const reason = firstNonEmptyString(
+    data?.message,
+    payload?.message,
+    data?.reason,
+    payload?.reason,
+    data?.statusMessage,
+  );
+
+  if (!externalId || (!isSuccess && !isFailure)) {
+    return false;
+  }
+
+  settlePendingTransactionByExternalId(
+    externalId,
+    isSuccess ? 'success' : 'failed',
+    ({ amount, transactionType }) => {
+      if (transactionType === 'withdrawal' || isWithdrawal) {
+        return isSuccess
+          ? `M-Pesa withdrawal of KES ${amount} completed successfully.`
+          : `Withdrawal failed${reason ? `: ${reason}` : '.'} Funds have been restored to your wallet.`;
+      }
+      return isSuccess
+        ? `M-Pesa deposit of KES ${amount} was successful.`
+        : `Deposit failed${reason ? `: ${reason}` : '.'}`;
+    },
+  );
+
+  sendJson(res, 200, { received: true });
+  return true;
+}
 
 // Create HTTP Server
 const server = http.createServer((req, res) => {
@@ -342,7 +470,7 @@ router.get('/static/engine.io.js', (_req: http.IncomingMessage, res: http.Server
   });
 });
 
-// --- M-Pesa Transactions (Real Safaricom Daraja) ---
+// --- M-Pesa Transactions ---
 
 router.post('/deposit/mpesa', (req: AuthenticatedRequest, res: http.ServerResponse) => {
     authenticateToken(req, res, async () => {
@@ -361,24 +489,45 @@ router.post('/deposit/mpesa', (req: AuthenticatedRequest, res: http.ServerRespon
                 return sendJson(res, 400, { error: 'No registered phone number found. Please update your profile.' });
             }
 
-            console.log(`[M-Pesa Deposit] Attempting STK Push for User ${req.user!.id}, Phone: ${phoneNumber}, Amount: ${amount}`);
-            
-            // Determine callback URL based on environment (should be provided in ENV, fallback to local test)
-            const callbackUrl = process.env.MPESA_CALLBACK_URL || `https://${req.headers.host}/callback/mpesa`;
+            console.log(`[M-Pesa Deposit] Attempting ${MPESA_PROVIDER.toUpperCase()} STK Push for User ${req.user!.id}, Phone: ${phoneNumber}, Amount: ${amount}`);
 
+            if (MPESA_PROVIDER === 'lipana') {
+                const result = await lipana.initiateStkPush(phoneNumber, amount);
+                const externalId = result.transactionId || result.checkoutRequestID;
+
+                if (result.success && externalId) {
+                    db.deposit(req.user!.id, amount, {
+                        status: 'pending',
+                        externalId,
+                    });
+                    sendJson(res, 200, {
+                        message: result.message || 'STK push sent. Check your phone and enter your M-Pesa PIN to complete the payment.',
+                        transactionId: externalId,
+                        phoneNumber,
+                        provider: 'lipana',
+                    });
+                    return;
+                }
+
+                console.error(`[M-Pesa Deposit] Lipana STK Push FAILED: ${result.message}`);
+                sendJson(res, 500, { error: result.message || 'Failed to initiate M-Pesa push.' });
+                return;
+            }
+
+            const callbackUrl = process.env.MPESA_CALLBACK_URL || buildCallbackUrl(req, '/callback/mpesa');
             const result = await initiateMpesaDeposit(amount, phoneNumber, callbackUrl);
-            
+
             if (result.ResponseCode === "0") {
                 console.log(`[M-Pesa Deposit] STK Push SUCCESS: ${result.CheckoutRequestID}`);
-                // Create a pending transaction
-                db.deposit(req.user!.id, amount, { 
-                    status: 'pending', 
-                    externalId: result.CheckoutRequestID 
+                db.deposit(req.user!.id, amount, {
+                    status: 'pending',
+                    externalId: result.CheckoutRequestID
                 });
                 sendJson(res, 200, {
                     message: 'STK push sent. Check your phone and enter your M-Pesa PIN to complete the payment.',
                     transactionId: result.CheckoutRequestID,
                     phoneNumber,
+                    provider: 'daraja',
                 });
             } else {
                 console.error(`[M-Pesa Deposit] STK Push FAILED: ${result.errorMessage || result.CustomerMessage}`);
@@ -411,19 +560,43 @@ router.post('/withdraw/mpesa', (req: AuthenticatedRequest, res: http.ServerRespo
                 return sendJson(res, 400, { error: 'Insufficient balance.' });
             }
 
-            console.log(`[M-Pesa Withdrawal] Attempting Payout for User ${req.user!.id}, Phone: ${phoneNumber}, Amount: ${amount}`);
-            
-            const resultUrl = process.env.MPESA_RESULT_URL || `https://${req.headers.host}/callback/mpesa/withdraw_result`;
-            const timeoutUrl = process.env.MPESA_TIMEOUT_URL || `https://${req.headers.host}/callback/mpesa/withdraw_timeout`;
+            console.log(`[M-Pesa Withdrawal] Attempting ${MPESA_PROVIDER.toUpperCase()} payout for User ${req.user!.id}, Phone: ${phoneNumber}, Amount: ${amount}`);
+
+            if (MPESA_PROVIDER === 'lipana') {
+                const result = await lipana.requestPayout(phoneNumber, amount);
+                const externalId = result.transactionId;
+
+                if (result.success && externalId) {
+                    db.withdraw(req.user!.id, amount, {
+                        status: 'pending',
+                        externalId,
+                    });
+                    const updatedUser = db.findUserById(req.user!.id);
+                    sendJson(res, 200, {
+                        message: result.message || 'Withdrawal request submitted. Lipana is processing the payout now.',
+                        transactionId: externalId,
+                        newBalance: updatedUser?.balance,
+                        phoneNumber,
+                        provider: 'lipana',
+                    });
+                    return;
+                }
+
+                console.error(`[M-Pesa Withdrawal] Lipana payout FAILED: ${result.message}`);
+                sendJson(res, 500, { error: result.message || 'Failed to initiate withdrawal.' });
+                return;
+            }
+
+            const resultUrl = process.env.MPESA_RESULT_URL || buildCallbackUrl(req, '/callback/mpesa/withdraw_result');
+            const timeoutUrl = process.env.MPESA_TIMEOUT_URL || buildCallbackUrl(req, '/callback/mpesa/withdraw_timeout');
 
             const result = await initiateMpesaWithdrawal(amount, phoneNumber, resultUrl, timeoutUrl);
-            
+
             if (result.ResponseCode === "0") {
                 console.log(`[M-Pesa Withdrawal] B2C Request SUCCESS: ${result.ConversationID}`);
-                // Create a pending withdrawal
-                db.withdraw(req.user!.id, amount, { 
-                    status: 'pending', 
-                    externalId: result.ConversationID 
+                db.withdraw(req.user!.id, amount, {
+                    status: 'pending',
+                    externalId: result.ConversationID
                 });
                 const updatedUser = db.findUserById(req.user!.id);
                 sendJson(res, 200, {
@@ -431,6 +604,7 @@ router.post('/withdraw/mpesa', (req: AuthenticatedRequest, res: http.ServerRespo
                     transactionId: result.ConversationID,
                     newBalance: updatedUser?.balance,
                     phoneNumber,
+                    provider: 'daraja',
                 });
             } else {
                 console.error(`[M-Pesa Withdrawal] Payout FAILED: ${result.errorMessage || 'Unknown Error'}`);
@@ -450,6 +624,10 @@ router.post('/callback/mpesa', async (req: http.IncomingMessage, res: http.Serve
             req.on('data', chunk => data += chunk);
             req.on('end', () => resolve(data));
         });
+
+        if (handleLipanaWebhook(bodyRaw, req, res)) {
+            return;
+        }
 
         const payload = JSON.parse(bodyRaw);
         console.log('Safaricom Daraja STK Push Webhook received');
@@ -497,6 +675,25 @@ router.post('/callback/mpesa', async (req: http.IncomingMessage, res: http.Serve
         sendJson(res, 200, { ResultCode: 0, ResultDesc: "Success" }); // Safaricom expects this standard response
     } catch (err) {
         console.error('Error processing Safaricom webhook:', err);
+        sendJson(res, 500, { error: 'Internal server error' });
+    }
+});
+
+router.post('/callback/lipana', async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    try {
+        const bodyRaw = await new Promise<string>((resolve) => {
+            let data = '';
+            req.on('data', chunk => data += chunk);
+            req.on('end', () => resolve(data));
+        });
+
+        if (handleLipanaWebhook(bodyRaw, req, res)) {
+            return;
+        }
+
+        sendJson(res, 400, { error: 'Unsupported Lipana webhook payload.' });
+    } catch (err) {
+        console.error('Error processing Lipana webhook:', err);
         sendJson(res, 500, { error: 'Internal server error' });
     }
 });
@@ -593,9 +790,10 @@ router.post('/callback/mpesa/withdraw_timeout', async (req: http.IncomingMessage
 if (LIPANA_API_KEY) {
     const masked = LIPANA_API_KEY.slice(0, 12) + '...' + LIPANA_API_KEY.slice(-8);
     console.log(`[Startup] Lipana API Key loaded: ${masked}`);
-} else {
+} else if (MPESA_PROVIDER === 'lipana') {
     console.warn('[Startup] WARNING: LIPANA_API_KEY is not set in environment.');
 }
+console.log(`[Startup] Active M-Pesa provider: ${MPESA_PROVIDER}`);
 
 function validateSingleGameSession(socket: any, userId: string): boolean {
     if (db.hasAnyActiveGame(userId)) {
