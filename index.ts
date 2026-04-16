@@ -20,6 +20,7 @@ import jwt, { verify } from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { DatabaseService } from './database';
 import { LipanaService } from './lipanaService';
+import { initiateMpesaDeposit, initiateMpesaWithdrawal } from './mpesa';
 import { AviatorGame, DiceGame, MinesGameLogic, PlinkoGameLogic, HiloGameLogic, RouletteGame } from './game';
 import {
   User,
@@ -94,6 +95,7 @@ const DEFAULT_RISK_SETTINGS: RiskSettings = {
 };
 const REFERRAL_COMMISSION_PERCENT = 0.01; // 1% commission
 const DAILY_BONUS_AMOUNT = 100;
+const CHAT_MESSAGE_COOLDOWN_MS = 2 * 60 * 1000;
 
 const sendJson = (res: http.ServerResponse, statusCode: number, payload: unknown): void => {
   res.writeHead(statusCode, { 'Content-Type': 'application/json' });
@@ -132,6 +134,28 @@ function parseBoolean(value: unknown, fallback = false): boolean {
     if (value.toLowerCase() === 'false') return false;
   }
   return fallback;
+}
+
+function parseResultCode(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+  return null;
+}
+
+function firstNonEmptyString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
 }
 
 function sanitizeRiskSettings(next: Partial<RiskSettings>, current: RiskSettings): RiskSettings {
@@ -318,7 +342,7 @@ router.get('/static/engine.io.js', (_req: http.IncomingMessage, res: http.Server
   });
 });
 
-// --- M-Pesa Transactions ---
+// --- M-Pesa Transactions (Real Safaricom Daraja) ---
 
 router.post('/deposit/mpesa', (req: AuthenticatedRequest, res: http.ServerResponse) => {
     authenticateToken(req, res, async () => {
@@ -338,18 +362,27 @@ router.post('/deposit/mpesa', (req: AuthenticatedRequest, res: http.ServerRespon
             }
 
             console.log(`[M-Pesa Deposit] Attempting STK Push for User ${req.user!.id}, Phone: ${phoneNumber}, Amount: ${amount}`);
-            const result = await lipana.initiateStkPush(phoneNumber, amount);
-            if (result.success) {
-                console.log(`[M-Pesa Deposit] STK Push SUCCESS: ${result.transactionId || result.checkoutRequestID}`);
+            
+            // Determine callback URL based on environment (should be provided in ENV, fallback to local test)
+            const callbackUrl = process.env.MPESA_CALLBACK_URL || `https://${req.headers.host}/callback/mpesa`;
+
+            const result = await initiateMpesaDeposit(amount, phoneNumber, callbackUrl);
+            
+            if (result.ResponseCode === "0") {
+                console.log(`[M-Pesa Deposit] STK Push SUCCESS: ${result.CheckoutRequestID}`);
                 // Create a pending transaction
                 db.deposit(req.user!.id, amount, { 
                     status: 'pending', 
-                    externalId: result.transactionId || result.checkoutRequestID 
+                    externalId: result.CheckoutRequestID 
                 });
-                sendJson(res, 200, { message: 'STK Push initiated. Please check your phone.', transactionId: result.transactionId });
+                sendJson(res, 200, {
+                    message: 'STK push sent. Check your phone and enter your M-Pesa PIN to complete the payment.',
+                    transactionId: result.CheckoutRequestID,
+                    phoneNumber,
+                });
             } else {
-                console.error(`[M-Pesa Deposit] STK Push FAILED: ${result.message}`);
-                sendJson(res, 500, { error: result.message });
+                console.error(`[M-Pesa Deposit] STK Push FAILED: ${result.errorMessage || result.CustomerMessage}`);
+                sendJson(res, 500, { error: result.CustomerMessage || 'Failed to initiate M-Pesa push.' });
             }
         } catch (err: any) {
             console.error(`[M-Pesa Deposit] Internal Error: ${err.message}`);
@@ -379,18 +412,29 @@ router.post('/withdraw/mpesa', (req: AuthenticatedRequest, res: http.ServerRespo
             }
 
             console.log(`[M-Pesa Withdrawal] Attempting Payout for User ${req.user!.id}, Phone: ${phoneNumber}, Amount: ${amount}`);
-            const result = await lipana.requestPayout(phoneNumber, amount);
-            if (result.success) {
-                console.log(`[M-Pesa Withdrawal] Payout SUCCESS: ${result.transactionId}`);
+            
+            const resultUrl = process.env.MPESA_RESULT_URL || `https://${req.headers.host}/callback/mpesa/withdraw_result`;
+            const timeoutUrl = process.env.MPESA_TIMEOUT_URL || `https://${req.headers.host}/callback/mpesa/withdraw_timeout`;
+
+            const result = await initiateMpesaWithdrawal(amount, phoneNumber, resultUrl, timeoutUrl);
+            
+            if (result.ResponseCode === "0") {
+                console.log(`[M-Pesa Withdrawal] B2C Request SUCCESS: ${result.ConversationID}`);
                 // Create a pending withdrawal
                 db.withdraw(req.user!.id, amount, { 
                     status: 'pending', 
-                    externalId: result.transactionId 
+                    externalId: result.ConversationID 
                 });
-                sendJson(res, 200, { message: 'Withdrawal request submitted.', transactionId: result.transactionId });
+                const updatedUser = db.findUserById(req.user!.id);
+                sendJson(res, 200, {
+                    message: 'Withdrawal request submitted. Safaricom is processing the payout now.',
+                    transactionId: result.ConversationID,
+                    newBalance: updatedUser?.balance,
+                    phoneNumber,
+                });
             } else {
-                console.error(`[M-Pesa Withdrawal] Payout FAILED: ${result.message}`);
-                sendJson(res, 500, { error: result.message });
+                console.error(`[M-Pesa Withdrawal] Payout FAILED: ${result.errorMessage || 'Unknown Error'}`);
+                sendJson(res, 500, { error: 'Failed to initiate withdrawal via Safaricom.' });
             }
         } catch (err: any) {
             console.error(`[M-Pesa Withdrawal] Internal Error: ${err.message}`);
@@ -401,62 +445,149 @@ router.post('/withdraw/mpesa', (req: AuthenticatedRequest, res: http.ServerRespo
 
 router.post('/callback/mpesa', async (req: http.IncomingMessage, res: http.ServerResponse) => {
     try {
-        const signature = req.headers['x-lipana-signature'] as string;
         const bodyRaw = await new Promise<string>((resolve) => {
             let data = '';
             req.on('data', chunk => data += chunk);
             req.on('end', () => resolve(data));
         });
 
-        if (LIPANA_WEBHOOK_SECRET && !lipana.verifyWebhookSignature(bodyRaw, signature, LIPANA_WEBHOOK_SECRET)) {
-            console.warn('Invalid Lipana webhook signature detected.');
-            return sendJson(res, 401, { error: 'Invalid signature' });
-        }
-
         const payload = JSON.parse(bodyRaw);
-        console.log('Lipana Webhook received:', payload);
+        console.log('Safaricom Daraja STK Push Webhook received');
 
-        const { event, data } = payload;
-        const externalId = data.transactionId || data.checkoutRequestID;
-        
-        if (externalId) {
-            const transaction = db.findTransactionByExternalId(externalId);
-            if (transaction && transaction.status === 'pending') {
-                let statusText = '';
-                let isSuccess = false;
+        // Parse Safaricom STK Push Payload
+        if (payload?.Body?.stkCallback) {
+            const stkCallback = payload.Body.stkCallback;
+            const checkoutRequestID = stkCallback.CheckoutRequestID;
+            const resultCode = parseResultCode(stkCallback.ResultCode);
+            const resultDesc = stkCallback.ResultDesc;
 
-                if (event === 'payment.success' || event === 'payout.success') {
-                    db.updateTransactionStatus(transaction.id, 'success');
-                    statusText = 'successful';
-                    isSuccess = true;
-                    console.log(`Transaction ${transaction.id} marked as SUCCESS (Lipana ID: ${externalId})`);
-                } else if (event.endsWith('.failed') || event.endsWith('.cancelled')) {
-                    db.updateTransactionStatus(transaction.id, 'failed');
-                    statusText = 'failed';
-                    isSuccess = false;
-                    console.log(`Transaction ${transaction.id} marked as FAILED (Lipana ID: ${externalId})`);
-                }
+            if (checkoutRequestID) {
+                const transaction = db.findTransactionByExternalId(checkoutRequestID);
+                
+                if (transaction && transaction.status === 'pending') {
+                    if (resultCode === 0) {
+                        // Success! Update transaction, which automatically increments user balance
+                        db.updateTransactionStatus(transaction.id, 'success');
+                        console.log(`Transaction ${transaction.id} marked as SUCCESS (CheckoutId: ${checkoutRequestID})`);
 
-                if (statusText) {
-                    // Notify user if online
-                    const socketId = userIdToSocketId.get(transaction.userId);
-                    if (socketId && engine.clients[socketId]) {
-                        const user = db.findUserById(transaction.userId);
-                        sendToSocket(engine.clients[socketId], 'BALANCE_UPDATE', { 
-                            balance: user?.balance,
-                            message: `M-Pesa ${transaction.type} of ${transaction.amount} was ${statusText}!`
+                        sendBalanceUpdate(transaction.userId, {
+                            message: `M-Pesa deposit of KES ${transaction.amount} was successful.`,
+                            status: 'success',
+                            transactionType: 'deposit',
+                            externalId: checkoutRequestID,
+                            amount: transaction.amount,
+                        });
+                    } else {
+                        // Failed or cancelled by user
+                        db.updateTransactionStatus(transaction.id, 'failed');
+                        console.log(`Transaction ${transaction.id} marked as FAILED. Reason: ${resultDesc}`);
+                        
+                        sendBalanceUpdate(transaction.userId, {
+                            message: `Deposit failed: ${resultDesc}`,
+                            status: 'failed',
+                            transactionType: 'deposit',
+                            externalId: checkoutRequestID,
+                            amount: transaction.amount,
                         });
                     }
                 }
             }
         }
 
-        sendJson(res, 200, { received: true });
+        sendJson(res, 200, { ResultCode: 0, ResultDesc: "Success" }); // Safaricom expects this standard response
     } catch (err) {
-        console.error('Error processing Lipana webhook:', err);
+        console.error('Error processing Safaricom webhook:', err);
         sendJson(res, 500, { error: 'Internal server error' });
     }
 });
+
+// B2C Webhook handlers for Withdrawal
+router.post('/callback/mpesa/withdraw_result', async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    try {
+        const bodyRaw = await new Promise<string>((resolve) => {
+            let data = '';
+            req.on('data', chunk => data += chunk);
+            req.on('end', () => resolve(data));
+        });
+        const payload = JSON.parse(bodyRaw);
+        console.log('Safaricom B2C Result Webhook:', payload);
+
+        const result = payload?.Result || payload?.result || payload;
+        const resultCode = parseResultCode(result?.ResultCode ?? payload?.ResultCode);
+        const resultDesc = firstNonEmptyString(
+            result?.ResultDesc,
+            payload?.ResultDesc,
+            payload?.errorMessage,
+            'Withdrawal could not be completed.',
+        ) || 'Withdrawal could not be completed.';
+        const externalId = firstNonEmptyString(
+            result?.ConversationID,
+            payload?.ConversationID,
+            result?.OriginatorConversationID,
+            payload?.OriginatorConversationID,
+        );
+
+        if (externalId) {
+            const transaction = db.findTransactionByExternalId(externalId);
+            if (transaction && transaction.status === 'pending') {
+                const isSuccess = resultCode === 0;
+                db.updateTransactionStatus(transaction.id, isSuccess ? 'success' : 'failed');
+                console.log(`Withdrawal transaction ${transaction.id} marked as ${isSuccess ? 'SUCCESS' : 'FAILED'} (${externalId})`);
+
+                sendBalanceUpdate(transaction.userId, {
+                    message: isSuccess
+                        ? `M-Pesa withdrawal of KES ${transaction.amount} completed successfully.`
+                        : `Withdrawal failed: ${resultDesc}. Funds have been restored to your wallet.`,
+                    status: isSuccess ? 'success' : 'failed',
+                    transactionType: 'withdrawal',
+                    externalId,
+                    amount: transaction.amount,
+                });
+            }
+        }
+        
+        // Ensure success response back to Safaricom
+        sendJson(res, 200, { ResultCode: 0, ResultDesc: "Success" });
+    } catch (err) {
+        console.error(err);
+        sendJson(res, 500, { error: 'Internal server error' });
+    }
+});
+
+router.post('/callback/mpesa/withdraw_timeout', async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    try {
+        const bodyRaw = await new Promise<string>((resolve) => {
+            let data = '';
+            req.on('data', chunk => data += chunk);
+            req.on('end', () => resolve(data));
+        });
+        const payload = bodyRaw ? JSON.parse(bodyRaw) : {};
+        const externalId = firstNonEmptyString(
+            payload?.Result?.ConversationID,
+            payload?.ConversationID,
+            payload?.Result?.OriginatorConversationID,
+            payload?.OriginatorConversationID,
+        );
+
+        if (externalId) {
+            const transaction = db.findTransactionByExternalId(externalId);
+            if (transaction && transaction.status === 'pending') {
+                db.updateTransactionStatus(transaction.id, 'failed');
+                sendBalanceUpdate(transaction.userId, {
+                    message: 'Withdrawal timed out. Funds have been restored to your wallet.',
+                    status: 'failed',
+                    transactionType: 'withdrawal',
+                    externalId,
+                    amount: transaction.amount,
+                });
+            }
+        }
+    } catch (err) {
+        console.error('Safaricom B2C Timeout Webhook error:', err);
+    }
+    sendJson(res, 200, { ResultCode: 0, ResultDesc: "Success" });
+});
+
 
 // Masked log for troubleshooting
 if (LIPANA_API_KEY) {
@@ -613,10 +744,31 @@ function sendError(socket: any, message: string, code?: string) {
   sendToSocket(socket, 'ERROR', { message, code });
 }
 
-function getPublicUser(user: User): Omit<User, 'password'> {
-  const { password: _password, ...publicUser } = user;
+function getPublicUser(user: User): Omit<User, 'password' | 'recoveryKey'> {
+  const { password: _password, recoveryKey: _recoveryKey, ...publicUser } = user;
   return publicUser;
-  // Note: recoveryKey is currently included in publicUser if it exists on the User object, which might be okay for the owner but should be stripped for others.
+}
+
+function sendBalanceUpdate(
+  userId: string,
+  payload: {
+    message: string;
+    status?: 'pending' | 'success' | 'failed';
+    transactionType?: 'deposit' | 'withdrawal';
+    externalId?: string | null;
+    amount?: number;
+  },
+): void {
+  const socketId = userIdToSocketId.get(userId);
+  if (!socketId || !engine.clients[socketId]) {
+    return;
+  }
+
+  const user = db.findUserById(userId);
+  sendToSocket(engine.clients[socketId], 'BALANCE_UPDATE', {
+    balance: user?.balance,
+    ...payload,
+  });
 }
 
 function getUserBySocket(socket: any): User | null {
@@ -2552,8 +2704,23 @@ function handleChatMessage(socket: any, payload: any): void {
 
   const now = Date.now();
   const lastMessageTime = chatRateLimit.get(user!.id) || 0;
-  if (now - lastMessageTime < 1000) {
-    return sendError(socket, 'You are sending messages too fast.', 'RATE_LIMIT_EXCEEDED');
+  const cooldownRemainingMs = (lastMessageTime + CHAT_MESSAGE_COOLDOWN_MS) - now;
+  if (cooldownRemainingMs > 0) {
+    const remainingSeconds = Math.ceil(cooldownRemainingMs / 1000);
+    const remainingMinutes = Math.floor(remainingSeconds / 60);
+    const remainingSecondsRemainder = remainingSeconds % 60;
+    const remainingLabel = remainingMinutes > 0
+      ? `${remainingMinutes}m ${String(remainingSecondsRemainder).padStart(2, '0')}s`
+      : `${remainingSecondsRemainder}s`;
+
+    sendToSocket(socket, 'ERROR', {
+      message: `You can send one chat message every 2 minutes. Try again in ${remainingLabel}.`,
+      code: 'RATE_LIMIT_EXCEEDED',
+      retryAfterMs: cooldownRemainingMs,
+      retryAfterSeconds: remainingSeconds,
+      chatCooldownMs: CHAT_MESSAGE_COOLDOWN_MS,
+    });
+    return;
   }
 
   const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
@@ -3062,6 +3229,16 @@ router.get('/transactions/me', authenticateToken, (req: AuthenticatedRequest, re
     data: transactions,
     meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
   });
+});
+
+router.get('/account/me', authenticateToken, (req: AuthenticatedRequest, res: http.ServerResponse) => {
+  const user = db.findUserById(req.user!.id);
+  if (!user) {
+    sendJson(res, 404, { error: 'User not found.' });
+    return;
+  }
+
+  sendJson(res, 200, getPublicUser(user));
 });
 
 router.get('/bets/me', authenticateToken, (req: AuthenticatedRequest, res: http.ServerResponse) => {
