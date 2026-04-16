@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virtual Betting Platform</title>
+    <title>OrbitBet Live | Realtime Betting Arena</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23102445'/%3E%3Ctext x='50' y='62' font-size='56' text-anchor='middle' fill='%23ffffff' font-family='Arial'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
     <script src="/static/engine.io.js?v=20260311n"></script>
     <!-- sound effects -->
@@ -14,37 +14,37 @@
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap');
 
         :root {
-            --bg-0: #050913;
-            --bg-1: #0b1730;
-            --bg-2: #102445;
-            --panel-bg: rgba(10, 23, 45, 0.8);
-            --panel-stroke: rgba(149, 192, 255, 0.2);
-            --surface: rgba(18, 35, 66, 0.86);
-            --surface-soft: rgba(23, 43, 80, 0.88);
-            --text-primary: #e8f2ff;
-            --text-secondary: #95abcc;
-            --accent-primary: #3da6ff;
-            --accent-secondary: #2fd0bf;
-            --accent-success: #2bd28f;
-            --accent-danger: #ff6a87;
-            --accent-warning: #f8ba58;
-            --shadow-soft: 0 18px 40px rgba(2, 8, 20, 0.45);
+            --bg-0: #0f0f0f;
+            --bg-1: #171717;
+            --bg-2: #222222;
+            --panel-bg: rgba(24, 24, 24, 0.94);
+            --panel-stroke: rgba(255, 204, 0, 0.14);
+            --surface: rgba(31, 31, 31, 0.98);
+            --surface-soft: rgba(40, 40, 40, 0.98);
+            --text-primary: #f6f2dc;
+            --text-secondary: #acaa9f;
+            --accent-primary: #ffd100;
+            --accent-secondary: #ffb800;
+            --accent-success: #8dd340;
+            --accent-danger: #ff6b57;
+            --accent-warning: #ffd100;
+            --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.42);
             --radius-lg: 20px;
             --radius-md: 12px;
             --radius-sm: 10px;
         }
 
         :root[data-theme="light"] {
-            --bg-0: #ffffff;
-            --bg-1: #f7fafc;
-            --bg-2: #edf2f7;
-            --panel-bg: rgba(255, 255, 255, 0.75);
-            --panel-stroke: rgba(0, 0, 0, 0.08);
-            --surface: #ffffff;
-            --surface-soft: #f7fafc;
-            --text-primary: #1a202c;
-            --text-secondary: #4a5568;
-            --shadow-soft: 0 18px 40px rgba(68, 76, 95, 0.12);
+            --bg-0: #fbf8ec;
+            --bg-1: #f3eed9;
+            --bg-2: #ebe2b8;
+            --panel-bg: rgba(255, 252, 241, 0.94);
+            --panel-stroke: rgba(145, 111, 0, 0.16);
+            --surface: #fffdf5;
+            --surface-soft: #f5eed2;
+            --text-primary: #211b09;
+            --text-secondary: #625b43;
+            --shadow-soft: 0 18px 40px rgba(77, 63, 18, 0.12);
         }
         /* Glassmorphism panel styling */
         .panel {
@@ -77,7 +77,7 @@
         }
 
         :root[data-theme="light"] body {
-            background: linear-gradient(135deg, #f0f5ff, #e6f0ff);
+            background: linear-gradient(135deg, #fffdf5, #f2ebcf);
         }
 
         * {
@@ -86,17 +86,354 @@
             padding: 0;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
+        .skip-link {
+            position: absolute;
+            left: 1rem;
+            top: -3rem;
+            z-index: 1200;
+            padding: 0.8rem 1rem;
+            border-radius: 999px;
+            background: #f8ba58;
+            color: #091323;
+            font-weight: 700;
+            text-decoration: none;
+            box-shadow: 0 10px 24px rgba(9, 19, 35, 0.22);
+            transition: top 0.2s ease;
+        }
+
+        .skip-link:focus-visible {
+            top: 1rem;
+        }
+
         body {
             font-family: 'Space Grotesk', 'Trebuchet MS', 'Segoe UI', sans-serif;
             background:
-                radial-gradient(circle at 10% 10%, rgba(56, 140, 255, 0.18), transparent 45%),
-                radial-gradient(circle at 85% 15%, rgba(32, 215, 186, 0.16), transparent 38%),
-                radial-gradient(circle at 50% 120%, rgba(255, 134, 89, 0.12), transparent 44%),
-                linear-gradient(135deg, var(--bg-0), var(--bg-1) 40%, var(--bg-2));
+                radial-gradient(circle at 8% 10%, rgba(255, 209, 0, 0.18), transparent 38%),
+                radial-gradient(circle at 88% 12%, rgba(255, 184, 0, 0.1), transparent 32%),
+                linear-gradient(180deg, #090909 0%, var(--bg-0) 34%, var(--bg-1) 100%);
             color: var(--text-primary);
             padding: 1rem;
             min-height: 100vh;
             overflow-y: auto;
+        }
+
+        body[data-chat-state="cooldown"] .chat-box {
+            border-color: rgba(248, 186, 88, 0.35);
+        }
+
+        body[data-chat-state="guest"] .chat-box {
+            border-color: rgba(255, 209, 0, 0.14);
+        }
+
+        .site-header {
+            width: min(1520px, 100%);
+            margin: 0 auto 1.1rem;
+            padding: 0.95rem 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            position: sticky;
+            top: 12px;
+            z-index: 100;
+            text-align: left;
+            background: rgba(18, 18, 18, 0.96);
+            border: 1px solid rgba(255, 209, 0, 0.12);
+            border-radius: 24px;
+            backdrop-filter: blur(18px);
+            box-shadow: 0 20px 44px rgba(0, 0, 0, 0.34);
+        }
+
+        .site-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            min-width: 0;
+        }
+
+        .site-brand__mark {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            font-family: 'Sora', 'Verdana', sans-serif;
+            font-weight: 700;
+            color: #171100;
+            background:
+                radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.42), transparent 38%),
+                linear-gradient(135deg, #ffe47b, #ffd100 58%, #f0a900);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 12px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .site-brand__eyebrow {
+            color: var(--accent-secondary);
+            font-size: 0.72rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .site-brand__name {
+            font-family: 'Sora', 'Verdana', sans-serif;
+            font-size: 1.18rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.03em;
+        }
+
+        .site-nav {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.45rem;
+            flex: 1;
+        }
+
+        .site-nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 0.58rem 0.82rem;
+            border-radius: 999px;
+            transition: color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+        }
+
+        .site-nav a:hover {
+            background: rgba(255, 209, 0, 0.12);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .site-header__actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.65rem;
+            flex-wrap: wrap;
+        }
+
+        .site-pill {
+            padding: 0.52rem 0.78rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 209, 0, 0.14);
+            background: rgba(31, 31, 31, 0.96);
+            color: var(--text-primary);
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .site-pill strong {
+            color: var(--accent-warning);
+            font-weight: 700;
+        }
+
+        .landing-shell {
+            width: min(1520px, 100%);
+            margin: 0 auto 1.5rem;
+            display: grid;
+            gap: 1rem;
+        }
+
+        body[data-session="member"] .landing-shell {
+            display: none;
+        }
+
+        .landing-main {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+            gap: 1rem;
+        }
+
+        .landing-hero-card {
+            position: relative;
+            overflow: hidden;
+            min-height: 360px;
+            background:
+                radial-gradient(circle at 16% 18%, rgba(255, 209, 0, 0.14), transparent 42%),
+                radial-gradient(circle at 88% 12%, rgba(255, 184, 0, 0.16), transparent 32%),
+                linear-gradient(135deg, rgba(23, 23, 23, 0.98), rgba(14, 14, 14, 0.96) 52%, rgba(8, 8, 8, 0.98));
+        }
+
+        .landing-hero-card::after {
+            content: '';
+            position: absolute;
+            inset: auto -10% -34% 46%;
+            height: 240px;
+            background: radial-gradient(circle, rgba(255, 184, 77, 0.18), transparent 70%);
+            pointer-events: none;
+        }
+
+        .landing-hero__copy {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-width: 720px;
+        }
+
+        .landing-tag {
+            color: var(--accent-warning);
+        }
+
+        .landing-title {
+            font-family: 'Sora', 'Verdana', sans-serif;
+            font-size: clamp(2.4rem, 5vw, 4.4rem);
+            line-height: 0.96;
+            letter-spacing: -0.04em;
+            max-width: 11ch;
+        }
+
+        .landing-copy {
+            max-width: 62ch;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+
+        .landing-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .landing-trust-grid,
+        .landing-feature-grid,
+        .arena-hero__stats,
+        .live-centre-grid {
+            display: grid;
+            gap: 0.8rem;
+        }
+
+        .landing-trust-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin-top: auto;
+        }
+
+        .trust-card,
+        .landing-preview-card,
+        .feature-card,
+        .arena-stat,
+        .live-centre-item,
+        .promo-item {
+            background: linear-gradient(180deg, rgba(35, 35, 35, 0.98), rgba(23, 23, 23, 0.98));
+            border: 1px solid rgba(255, 209, 0, 0.1);
+            border-radius: 16px;
+            padding: 0.95rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .trust-card__label,
+        .preview-card__label,
+        .feature-card__label,
+        .arena-stat__label,
+        .live-centre-item__label,
+        .promo-item__label {
+            font-size: 0.7rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 0.42rem;
+        }
+
+        .trust-card__value,
+        .preview-card__value,
+        .feature-card__title,
+        .arena-stat__value,
+        .live-centre-item__value {
+            font-family: 'Sora', 'Verdana', sans-serif;
+            color: var(--text-primary);
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .trust-card__meta,
+        .preview-card__meta,
+        .feature-card__copy,
+        .arena-stat__meta,
+        .promo-item__copy {
+            margin-top: 0.35rem;
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            line-height: 1.5;
+        }
+
+        .landing-preview-stack {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .landing-preview-card {
+            min-height: 170px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .landing-preview-card--accent {
+            background:
+                radial-gradient(circle at 85% 15%, rgba(255, 209, 0, 0.2), transparent 30%),
+                linear-gradient(180deg, rgba(38, 31, 7, 0.98), rgba(20, 20, 20, 0.98));
+        }
+
+        .preview-odds {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.6rem;
+            margin-top: 1rem;
+        }
+
+        .preview-odds__pill {
+            padding: 0.7rem 0.75rem;
+            border-radius: 14px;
+            background: rgba(14, 14, 14, 0.88);
+            border: 1px solid rgba(255, 209, 0, 0.12);
+        }
+
+        .preview-odds__pill strong {
+            display: block;
+            font-size: 1rem;
+            color: var(--text-primary);
+            font-family: 'Sora', 'Verdana', sans-serif;
+        }
+
+        .preview-odds__pill span {
+            display: block;
+            margin-top: 0.24rem;
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .landing-feature-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .feature-card {
+            min-height: 176px;
+            background:
+                linear-gradient(180deg, rgba(35, 35, 35, 0.98), rgba(20, 20, 20, 0.98));
+        }
+
+        .feature-card__icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, rgba(255, 209, 0, 0.24), rgba(255, 168, 0, 0.18));
+            border: 1px solid rgba(255, 209, 0, 0.18);
+            font-size: 1.1rem;
         }
 
         .status-badge {
@@ -135,7 +472,9 @@
             margin: 0 auto;
             display: grid;
             grid-template-columns: 320px minmax(0, 1fr) 360px;
+            grid-template-areas: 'left main right';
             gap: 1.5rem;
+            align-items: start;
         }
 
         .reveal {
@@ -144,9 +483,9 @@
             transform: translateY(10px);
         }
 
-        .left-panel { animation-delay: 0.04s; }
-        .game-area { animation-delay: 0.1s; }
-        .right-panel { animation-delay: 0.18s; }
+        .left-panel { grid-area: left; animation-delay: 0.04s; }
+        .game-area { grid-area: main; animation-delay: 0.1s; }
+        .right-panel { grid-area: right; animation-delay: 0.18s; }
 
         @keyframes panelIn {
             to {
@@ -182,6 +521,107 @@
 
         .side-panel {
             overflow-y: auto;
+            position: sticky;
+            top: 96px;
+            max-height: calc(100vh - 114px);
+        }
+
+        .brand-block {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.9rem;
+        }
+
+        .sportsbook-shortcuts {
+            display: grid;
+            gap: 0.55rem;
+        }
+
+        .shortcut-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.8rem 0.9rem;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 209, 0, 0.12);
+            background: linear-gradient(180deg, rgba(29, 29, 29, 0.98), rgba(20, 20, 20, 0.98));
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .shortcut-card span {
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .shortcut-card strong {
+            font-family: 'Sora', 'Verdana', sans-serif;
+            font-size: 0.9rem;
+            color: var(--accent-primary);
+        }
+
+        .market-note {
+            padding: 0.78rem 0.9rem;
+            border-radius: 14px;
+            background: rgba(255, 209, 0, 0.08);
+            border: 1px solid rgba(255, 209, 0, 0.14);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
+
+        .top-controls {
+            display: flex;
+            gap: 0.55rem;
+        }
+
+        .auth-surface {
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+        }
+
+        .auth-panel__intro {
+            background: linear-gradient(135deg, rgba(255, 209, 0, 0.12), rgba(255, 168, 0, 0.08));
+            border: 1px solid rgba(255, 209, 0, 0.16);
+            border-radius: 16px;
+            padding: 1rem;
+        }
+
+        .auth-panel__title {
+            margin-top: 0.35rem;
+            font-family: 'Sora', 'Verdana', sans-serif;
+            font-size: 1.18rem;
+            color: var(--text-primary);
+        }
+
+        .auth-panel__copy,
+        .auth-footnote {
+            color: var(--text-secondary);
+            font-size: 0.84rem;
+            line-height: 1.6;
+        }
+
+        .auth-benefits {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+        }
+
+        .auth-benefit {
+            padding: 0.48rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(37, 37, 37, 0.92);
+            border: 1px solid rgba(255, 209, 0, 0.14);
+            color: var(--text-primary);
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }
 
         .brand-block h2 {
@@ -229,18 +669,19 @@
 
         input[type="text"], input[type="password"], input[type="number"], textarea, select {
             background: var(--surface-soft);
-            border: 1px solid rgba(147, 193, 255, 0.2);
+            border: 1px solid rgba(255, 209, 0, 0.16);
             border-radius: var(--radius-sm);
             padding: 0.75rem 0.8rem;
             color: var(--text-primary);
             font-size: 0.96rem;
+            min-height: 46px;
             outline: none;
             transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
 
         input:focus, textarea:focus, select:focus {
             border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(61, 166, 255, 0.18);
+            box-shadow: 0 0 0 3px rgba(255, 209, 0, 0.16);
         }
 
         .btn {
@@ -253,6 +694,20 @@
             font-size: 0.94rem;
             letter-spacing: 0.02em;
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.24);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 46px;
+        }
+
+        a:focus-visible,
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        select:focus-visible {
+            outline: 3px solid rgba(248, 186, 88, 0.9);
+            outline-offset: 2px;
         }
 
         .btn:hover {
@@ -261,22 +716,22 @@
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #2f8eff, #2fd0bf);
-            color: #041527;
+            background: linear-gradient(180deg, #ffd100, #efb500);
+            color: #1b1500;
         }
 
         .btn-success {
-            background: linear-gradient(135deg, #2ad287, #56e6ac);
-            color: #082119;
+            background: linear-gradient(180deg, #9ad54a, #79b733);
+            color: #102100;
         }
 
         .btn-danger {
-            background: linear-gradient(135deg, #ff5a78, #ff8c78);
+            background: linear-gradient(180deg, #ff775d, #ef5334);
             color: #2b0a11;
         }
 
         .btn-warning {
-            background: linear-gradient(135deg, #ffd27d, #f8ba58);
+            background: linear-gradient(180deg, #ffe07a, #ffc839);
             color: #2a1a03;
         }
 
@@ -307,7 +762,7 @@
 
         .stack-card {
             background: var(--surface);
-            border: 1px solid rgba(141, 173, 222, 0.22);
+            border: 1px solid rgba(255, 209, 0, 0.12);
             border-radius: var(--radius-md);
             padding: 0.8rem;
             display: flex;
@@ -378,6 +833,102 @@
             grid-template-columns: 1fr 1fr;
             gap: 0.55rem;
         }
+
+        .mpesa-card {
+            gap: 0.8rem;
+        }
+
+        .mpesa-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .mpesa-intro {
+            background: linear-gradient(135deg, rgba(255, 209, 0, 0.1), rgba(141, 211, 64, 0.08));
+            border: 1px solid rgba(255, 209, 0, 0.16);
+            border-radius: var(--radius-md);
+            padding: 0.85rem;
+        }
+
+        .mpesa-heading {
+            font-family: 'Sora', 'Verdana', sans-serif;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-bottom: 0.3rem;
+        }
+
+        .mpesa-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.65rem;
+        }
+
+        .mpesa-chip {
+            background: rgba(23, 43, 80, 0.86);
+            border: 1px solid rgba(129, 160, 206, 0.24);
+            border-radius: 10px;
+            padding: 0.65rem 0.75rem;
+        }
+
+        .mpesa-chip-label {
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .mpesa-chip-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .mpesa-status-card {
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(129, 160, 206, 0.24);
+            background: rgba(20, 36, 66, 0.86);
+            padding: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .mpesa-status-card[data-state="idle"] {
+            border-color: rgba(129, 160, 206, 0.24);
+        }
+
+        .mpesa-status-card[data-state="pending"] {
+            border-color: rgba(248, 186, 88, 0.45);
+            box-shadow: 0 0 0 1px rgba(248, 186, 88, 0.16) inset;
+        }
+
+        .mpesa-status-card[data-state="success"] {
+            border-color: rgba(43, 210, 143, 0.48);
+            box-shadow: 0 0 0 1px rgba(43, 210, 143, 0.16) inset;
+        }
+
+        .mpesa-status-card[data-state="error"] {
+            border-color: rgba(255, 106, 135, 0.45);
+            box-shadow: 0 0 0 1px rgba(255, 106, 135, 0.16) inset;
+        }
+
+        .mpesa-status-title {
+            font-family: 'Sora', 'Verdana', sans-serif;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .mpesa-status-message {
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+
+        .mpesa-status-meta {
+            color: var(--accent-secondary);
+            font-size: 0.76rem;
+        }
         
         .settings-toggle-btn {
             background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 0;
@@ -440,6 +991,32 @@
             min-height: 0;
         }
 
+        .arena-hero-card {
+            display: grid;
+            grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.95fr);
+            gap: 1rem;
+            align-items: center;
+            background:
+                radial-gradient(circle at 12% 18%, rgba(255, 209, 0, 0.18), transparent 34%),
+                radial-gradient(circle at 88% 10%, rgba(255, 184, 0, 0.12), transparent 30%),
+                linear-gradient(135deg, rgba(26, 26, 26, 0.98), rgba(14, 14, 14, 0.98));
+        }
+
+        .arena-hero__title {
+            margin-top: 0.35rem;
+            font-family: 'Sora', 'Verdana', sans-serif;
+            font-size: clamp(1.4rem, 3vw, 2.2rem);
+            line-height: 1.1;
+            max-width: 16ch;
+        }
+
+        .arena-hero__copy {
+            margin-top: 0.65rem;
+            color: var(--text-secondary);
+            line-height: 1.65;
+            max-width: 64ch;
+        }
+
         .game-display {
             --aircraft-x: 18%;
             --aircraft-y: 78%;
@@ -466,6 +1043,10 @@
             display: flex;
             flex-direction: column;
             gap: 0.6rem;
+            background: rgba(28, 28, 28, 0.98);
+            border: 1px solid rgba(255, 209, 0, 0.1);
+            border-radius: 18px;
+            padding: 1rem;
         }
         .switcher-group {
             display: flex;
@@ -1461,9 +2042,9 @@
             font-family: 'Sora', sans-serif;
             border: 1px solid transparent;
         }
-        .history-pill.high { color: #c056ff; background: rgba(192, 86, 255, 0.12); border-color: rgba(192, 86, 255, 0.2); }
-        .history-pill.medium { color: #79f3c5; background: rgba(121, 243, 197, 0.12); border-color: rgba(121, 243, 197, 0.2); }
-        .history-pill.low { color: #3da6ff; background: rgba(61, 166, 255, 0.12); border-color: rgba(61, 166, 255, 0.2); }
+        .history-pill.high { color: #ffe47b; background: rgba(255, 209, 0, 0.14); border-color: rgba(255, 209, 0, 0.24); }
+        .history-pill.medium { color: #b5df76; background: rgba(141, 211, 64, 0.12); border-color: rgba(141, 211, 64, 0.22); }
+        .history-pill.low { color: #d4d0bb; background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.12); }
 
         /* --- Unified Betting Panel --- */
         .bet-control-panel {
@@ -1471,6 +2052,7 @@
             border-radius: var(--radius-lg);
             padding: 1rem;
             border: 1px solid var(--panel-stroke);
+            box-shadow: inset 0 0 0 1px rgba(255, 209, 0, 0.04);
             display: grid;
             grid-template-columns: 1fr 160px;
             gap: 1rem;
@@ -1815,10 +2397,98 @@
             border-color: rgba(255, 106, 135, 0.35);
         }
 
+        .live-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.32rem;
+            color: var(--accent-success);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .live-status-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--accent-success);
+            box-shadow: 0 0 0 0 rgba(43, 210, 143, 0.55);
+            animation: blinkDot 1.2s infinite ease-out;
+        }
+
+        .live-centre-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .promo-stack {
+            background: linear-gradient(180deg, rgba(34, 34, 34, 0.98), rgba(18, 18, 18, 0.98));
+        }
+
+        .promo-list {
+            display: grid;
+            gap: 0.65rem;
+        }
+
         .chat-box, .log-box {
             flex-grow: 1;
             display: flex;
             flex-direction: column;
+            background: var(--surface);
+            border: 1px solid rgba(255, 209, 0, 0.12);
+            border-radius: 16px;
+            padding: 0.9rem;
+            gap: 0.75rem;
+        }
+
+        .chat-box__status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.8rem 0.9rem;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 209, 0, 0.12);
+            background: rgba(32, 32, 32, 0.88);
+        }
+
+        .chat-box__status[data-tone="guest"] {
+            background: rgba(28, 28, 28, 0.96);
+        }
+
+        .chat-box__status[data-tone="ready"] {
+            border-color: rgba(43, 210, 143, 0.35);
+            background: rgba(20, 62, 50, 0.32);
+        }
+
+        .chat-box__status[data-tone="cooldown"] {
+            border-color: rgba(248, 186, 88, 0.38);
+            background: rgba(82, 56, 12, 0.32);
+        }
+
+        .chat-box__status[data-tone="offline"] {
+            border-color: rgba(255, 106, 135, 0.3);
+            background: rgba(76, 24, 39, 0.24);
+        }
+
+        .chat-status-copy {
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+
+        .chat-cooldown-badge {
+            flex-shrink: 0;
+            padding: 0.48rem 0.72rem;
+            border-radius: 999px;
+            border: 1px solid rgba(141, 173, 222, 0.24);
+            background: rgba(10, 23, 45, 0.78);
+            color: var(--text-primary);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
         .messages {
@@ -1853,10 +2523,31 @@
         .chat-input {
             display: flex;
             gap: 0.5rem;
-            margin-top: 0.65rem;
+            align-items: stretch;
         }
 
         .chat-input input { flex: 1; }
+
+        .chat-input button {
+            min-width: 112px;
+        }
+
+        .chat-input input:disabled,
+        .chat-input button:disabled {
+            cursor: not-allowed;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
 
         .compact-list {
             max-height: 180px;
@@ -1925,6 +2616,10 @@
             .app-shell {
                 grid-template-columns: 290px minmax(0, 1fr) 320px;
             }
+
+            .landing-feature-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
 
         @media (max-width: 1090px) {
@@ -1933,9 +2628,28 @@
                 overflow: auto;
             }
 
+            .site-header,
+            .landing-main,
+            .arena-hero-card {
+                grid-template-columns: 1fr;
+            }
+
+            .site-header {
+                position: static;
+                align-items: flex-start;
+            }
+
+            .site-nav {
+                justify-content: flex-start;
+            }
+
             .app-shell {
                 height: auto;
                 grid-template-columns: 1fr;
+                grid-template-areas:
+                    'left'
+                    'main'
+                    'right';
                 gap: 0.9rem;
             }
 
@@ -1963,11 +2677,73 @@
                 grid-template-columns: 1fr;
             }
 
+            .landing-trust-grid,
+            .arena-hero__stats,
+            .live-centre-grid,
+            .preview-odds {
+                grid-template-columns: 1fr 1fr;
+            }
+
             .game-display {
                 --aircraft-scale: 0.84;
             }
             
             .bet-control-panel {
+                grid-template-columns: 1fr;
+            }
+
+            .side-panel {
+                position: static;
+                max-height: none;
+            }
+
+            .right-panel {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 0.9rem;
+            }
+
+            .chat-box,
+            .log-box,
+            .promo-stack,
+            .right-panel > .stack-card {
+                min-height: 0;
+            }
+
+            .chat-box,
+            .promo-stack,
+            #leaderboardBox {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .landing-feature-grid,
+            .landing-trust-grid,
+            .arena-hero__stats,
+            .live-centre-grid,
+            .preview-odds {
+                grid-template-columns: 1fr;
+            }
+
+            body {
+                padding: 0.75rem;
+            }
+
+            .site-header {
+                border-radius: 20px;
+                padding: 0.9rem;
+            }
+
+            .chat-input {
+                flex-direction: column;
+            }
+
+            .chat-input button {
+                width: 100%;
+            }
+
+            .right-panel {
                 grid-template-columns: 1fr;
             }
         }
@@ -2032,34 +2808,174 @@
         }
     </style>
 </head>
-<body>
+<body data-session="guest" data-chat-state="guest">
+<a class="skip-link" href="#mainGameArea">Skip to live arena</a>
 
-<div id="notification"></div>
+<div id="notification" role="status" aria-live="polite"></div>
 
 <div id="system-notifications" style="position: fixed; top: 80px; right: 20px; width: 300px; z-index: 999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;">
     <!-- Notifications will be injected here -->
 </div>
 
-<div class="app-shell">
+<header class="site-header reveal">
+    <div class="site-brand">
+        <div class="site-brand__mark">OB</div>
+        <div>
+            <div class="site-brand__eyebrow">Virtual Sportsbook Desk</div>
+            <div class="site-brand__name">OrbitBet Virtual</div>
+        </div>
+    </div>
+    <nav class="site-nav">
+        <a href="#landingShell">Overview</a>
+        <a href="#auth-panel">Account</a>
+        <a href="#mainGameArea">Virtuals</a>
+        <a href="#bettingControls">Bet Slip</a>
+        <a href="#chatBox">Chat</a>
+    </nav>
+    <div class="site-header__actions">
+        <div class="site-pill">Virtual desk <strong>24/7</strong></div>
+        <a class="btn btn-primary mini-btn" href="#auth-panel">Join Now</a>
+    </div>
+</header>
+
+<section id="landingShell" class="landing-shell reveal">
+    <div class="landing-main">
+        <article class="panel landing-hero-card">
+            <div class="landing-hero__copy">
+                <div class="section-title landing-tag">Sportsbook-Style Virtual Lobby</div>
+                <h1 class="landing-title">A darker, faster betting desk for virtual rounds, quick games and M-Pesa wallet play.</h1>
+                <p class="landing-copy">
+                    Open one account, fund with M-Pesa, and move between crash-style games, card tables, roulette, mines and tournaments from a compact sportsbook layout.
+                    Wallet actions, bet history, chat and active rounds stay arranged like a proper betting terminal.
+                </p>
+                <div class="landing-actions">
+                    <a class="btn btn-success" href="#auth-panel">Open Account</a>
+                    <a class="btn btn-primary" href="#mainGameArea">Browse Virtuals</a>
+                </div>
+                <div class="landing-trust-grid">
+                    <div class="trust-card">
+                        <div class="trust-card__label">Payment Flow</div>
+                        <div class="trust-card__value">Instant M-Pesa</div>
+                        <div class="trust-card__meta">STK push deposits and realtime wallet reflection.</div>
+                    </div>
+                    <div class="trust-card">
+                        <div class="trust-card__label">Game Mix</div>
+                        <div class="trust-card__value">Crash + Tables</div>
+                        <div class="trust-card__meta">Switch between live-feel crash, cards, grid and quick games.</div>
+                    </div>
+                    <div class="trust-card">
+                        <div class="trust-card__label">Settlement</div>
+                        <div class="trust-card__value">Live Updates</div>
+                        <div class="trust-card__meta">Balances, history and outcomes update without page refresh.</div>
+                    </div>
+                    <div class="trust-card">
+                        <div class="trust-card__label">Community</div>
+                        <div class="trust-card__value">Chat + Tournaments</div>
+                        <div class="trust-card__meta">Compete on daily boards and join the live room instantly.</div>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <div class="landing-preview-stack">
+            <article class="landing-preview-card landing-preview-card--accent">
+                <div class="preview-card__label">Featured Lobby</div>
+                <div class="preview-card__value">Virtual action stays front and center</div>
+                <div class="preview-card__meta">
+                    Aviator, JetX, Spaceman, Crash and Balloon sit in the same board with a tighter category flow and a clearer stake panel.
+                </div>
+                <div class="preview-odds">
+                    <div class="preview-odds__pill">
+                        <strong>1.41x</strong>
+                        <span>Fast Round</span>
+                    </div>
+                    <div class="preview-odds__pill">
+                        <strong>4.82x</strong>
+                        <span>Hot Exit</span>
+                    </div>
+                    <div class="preview-odds__pill">
+                        <strong>12.33x</strong>
+                        <span>High Spike</span>
+                    </div>
+                </div>
+            </article>
+
+            <article class="landing-preview-card">
+                <div class="preview-card__label">Betting Flow</div>
+                <div class="preview-card__value">Login. Cashier. Stake. Track.</div>
+                <div class="preview-card__meta">
+                    The interface now leans closer to a sportsbook flow: account and categories left, action board center, and ticket plus room activity on the right.
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <div class="landing-feature-grid">
+        <article class="feature-card">
+            <div class="feature-card__icon">⚡</div>
+            <div class="feature-card__label">Crash Markets</div>
+            <div class="feature-card__title">Fast round switching</div>
+            <div class="feature-card__copy">Move between multiple crash variants without leaving the main game screen.</div>
+        </article>
+        <article class="feature-card">
+            <div class="feature-card__icon">💳</div>
+            <div class="feature-card__label">Wallet Desk</div>
+            <div class="feature-card__title">Professional cashier flow</div>
+            <div class="feature-card__copy">M-Pesa deposits, withdrawals, transfers, balance view and payment status in one place.</div>
+        </article>
+        <article class="feature-card">
+            <div class="feature-card__icon">🏆</div>
+            <div class="feature-card__label">Retention</div>
+            <div class="feature-card__title">Daily rewards and leaderboards</div>
+            <div class="feature-card__copy">Keep players engaged with bonuses, tournament ladders and competitive tracking.</div>
+        </article>
+        <article class="feature-card">
+            <div class="feature-card__icon">🛡️</div>
+            <div class="feature-card__label">Trust Layer</div>
+            <div class="feature-card__title">Provably fair access</div>
+            <div class="feature-card__copy">Fairness reveals, realtime status notices and transparent round history stay close to the action.</div>
+        </article>
+    </div>
+</section>
+
+<div id="appShell" class="app-shell">
     <aside class="panel side-panel left-panel reveal">
         <div class="brand-block">
             <div>
-                <div class="eyebrow">Realtime Betting</div>
-                <h2>Control Deck</h2>
+                <div class="eyebrow">Virtual Sportsbook</div>
+                <h2>Betting Menu</h2>
             </div>
             <div class="top-controls">
                 <button id="themeToggleBtn" class="icon-btn" title="Toggle Theme">🌓</button>
                 <button id="soundToggleBtn" class="icon-btn" title="Toggle Sound">🔊</button>
             </div>
         </div>
-        <div id="auth-panel">
-            <h3>Authentication</h3>
+        <div class="sportsbook-shortcuts">
+            <a class="shortcut-card" href="#auth-panel"><span>Account</span><strong>Login / Register</strong></a>
+            <a class="shortcut-card" href="#bettingControls"><span>Bet Slip</span><strong>Stake & Controls</strong></a>
+            <a class="shortcut-card" href="#chatBox"><span>Community</span><strong>Live Chat Room</strong></a>
+        </div>
+        <div class="market-note">Yellowbet-inspired direction: darker shell, yellow highlights, tighter information blocks, and a more ticket-first layout across small and big screens.</div>
+        <div id="auth-panel" class="auth-surface">
+            <div class="auth-panel__intro">
+                <div class="section-title">Account & Cashier</div>
+                <div class="auth-panel__title">Open your betting wallet and unlock posting, deposits and virtual play</div>
+                <div class="auth-panel__copy">
+                    Create a player account, save your phone number, and move directly into deposits, live rounds, tournaments and realtime settlement from one side menu.
+                </div>
+            </div>
+            <div class="auth-benefits">
+                <span class="auth-benefit">Instant M-Pesa</span>
+                <span class="auth-benefit">Live Bet Tracking</span>
+                <span class="auth-benefit">Tournaments</span>
+                <span class="auth-benefit">Wallet Transfers</span>
+            </div>
             <div class="form-group">
                 <input type="text" id="username" placeholder="Username">
                 <input type="password" id="password" placeholder="Password">
                 <input type="text" id="phoneNumber" placeholder="Phone Number (Optional)">
                 <input type="text" id="referralCode" placeholder="Referral Code (Optional)">
-                <div id="connectionStatus" class="connection-status disconnected">Realtime: Connecting...</div>
+                <div id="connectionStatus" class="connection-status disconnected" role="status" aria-live="polite">Realtime: Connecting...</div>
                 <div class="form-grid-two">
                     <button id="register" class="btn btn-primary">Register</button>
                     <button id="login" class="btn btn-success">Login</button>
@@ -2068,6 +2984,7 @@
                     <a href="#" id="forgotPasswordLink" style="color: var(--accent-primary); font-size: 0.8rem; text-decoration: none;">Forgot Password?</a>
                 </div>
             </div>
+            <div class="auth-footnote">Use the same account to manage crash bets, quick games, deposits, withdrawals and leaderboard sessions from a single dashboard.</div>
             <div id="reset-password-form" style="display: none; margin-top: 1rem; border-top: 1px solid var(--panel-stroke); padding-top: 1rem;">
                 <h3 style="margin-bottom: 0.5rem;">Reset Password</h3>
                 <input type="text" id="resetUsername" placeholder="Username" style="margin-bottom: 0.5rem; width: 100%;">
@@ -2131,15 +3048,35 @@
                 <div class="form-group">
                     <input type="number" id="walletAmount" placeholder="Amount">
                 </div>
-                <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--panel-stroke); padding-top: 1rem;">
-                    <span class="section-title" style="font-size: 0.8rem; margin-bottom: 0.5rem; display: block;">M-Pesa (Lipana.dev)</span>
-                    <div id="mpesaPhoneDisplay" style="font-size: 0.8rem; margin-bottom: 0.5rem; color: var(--accent-primary); display: none;">
-                        Phone: <span id="registeredMpesaPhone"></span>
+                <div class="stack-card mpesa-card" style="margin-top: 0.2rem;">
+                    <div class="section-head">
+                        <span class="section-title">M-Pesa Checkout</span>
                     </div>
-                    <input type="text" id="mpesaPhoneNumber" placeholder="Phone (e.g. 0712345678)">
-                    <div class="wallet-actions">
-                        <button id="depositMpesa" class="btn btn-success" style="background: #2ecc71;">M-Pesa Deposit</button>
-                        <button id="withdrawMpesa" class="btn btn-danger" style="background: #e74c3c;">M-Pesa Withdraw</button>
+                    <div class="mpesa-shell">
+                        <div class="mpesa-intro">
+                            <div class="mpesa-heading">Instant wallet payments</div>
+                            <div class="tiny-note">For deposits, Safaricom sends an STK push to your phone. You complete the payment by entering your M-Pesa PIN on the handset, not in the browser.</div>
+                        </div>
+                        <div class="mpesa-grid">
+                            <div class="mpesa-chip">
+                                <div class="mpesa-chip-label">Registered Number</div>
+                                <div id="mpesaPhoneDisplay" class="mpesa-chip-value" style="display: none;">
+                                    <span id="registeredMpesaPhone"></span>
+                                </div>
+                                <div id="mpesaPhoneEmpty" class="tiny-note">No number saved yet. Enter one below for this payment.</div>
+                            </div>
+                        </div>
+                        <input type="text" id="mpesaPhoneNumber" placeholder="M-Pesa phone number (e.g. 0712345678)">
+                        <div class="tiny-note">Minimum deposit is KES 10. Leave the field blank to use your saved M-Pesa number automatically.</div>
+                        <div class="wallet-actions">
+                            <button id="depositMpesa" class="btn btn-success" style="background: #2ecc71;">Deposit via M-Pesa</button>
+                            <button id="withdrawMpesa" class="btn btn-danger" style="background: #e74c3c;">Withdraw to M-Pesa</button>
+                        </div>
+                        <div id="mpesaStatusCard" class="mpesa-status-card" data-state="idle">
+                            <div id="mpesaStatusTitle" class="mpesa-status-title">Ready for payment</div>
+                            <div id="mpesaStatusMessage" class="mpesa-status-message">Use your saved M-Pesa number or enter another number, then choose deposit or withdraw.</div>
+                            <div id="mpesaStatusMeta" class="mpesa-status-meta">Realtime wallet updates will appear here after Safaricom confirms the transaction.</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2455,7 +3392,39 @@
         </div>
     </aside>
 
-    <main class="game-area reveal game-area-inner" id="mainGameArea">
+    <main class="game-area reveal game-area-inner" id="mainGameArea" tabindex="-1">
+        <section class="panel arena-hero-card">
+            <div>
+                <div class="section-title">Virtual Lobby</div>
+                <div class="arena-hero__title">Keep categories, gameplay, wallet action and ticket controls in one sportsbook-style board.</div>
+                <div class="arena-hero__copy">
+                    The center panel is arranged more like a virtual sportsbook: featured categories first, active market board second, and stake entry plus action buttons fixed close to the display.
+                </div>
+            </div>
+            <div class="arena-hero__stats">
+                <div class="arena-stat">
+                    <div class="arena-stat__label">Featured Desk</div>
+                    <div class="arena-stat__value">Crash + Tables</div>
+                    <div class="arena-stat__meta">Aviator-style play, blackjack, baccarat, roulette and quick games in one board.</div>
+                </div>
+                <div class="arena-stat">
+                    <div class="arena-stat__label">Cashier</div>
+                    <div class="arena-stat__value">M-Pesa Ready</div>
+                    <div class="arena-stat__meta">Deposit, withdraw, transfer and view payment status without leaving the desk.</div>
+                </div>
+                <div class="arena-stat">
+                    <div class="arena-stat__label">Slip Control</div>
+                    <div class="arena-stat__value">Stake Fast</div>
+                    <div class="arena-stat__meta">Amounts, presets and action buttons stay grouped like a proper bet slip.</div>
+                </div>
+                <div class="arena-stat">
+                    <div class="arena-stat__label">Competition</div>
+                    <div class="arena-stat__value">Daily Boards</div>
+                    <div class="arena-stat__meta">Track wagers, tournaments and player momentum in one session.</div>
+                </div>
+            </div>
+        </section>
+
         <div class="game-switcher">
             <div class="switcher-group">
                 <span class="switcher-label">Crash Suite</span>
@@ -2795,17 +3764,65 @@
     </main>
 
     <aside class="panel side-panel right-panel reveal">
-        <div class="chat-box">
-            <h3>Live Chat</h3>
-            <div id="chat-messages" class="messages"></div>
-            <div class="chat-input">
-                <input type="text" id="chatInput" placeholder="Say something...">
-                <button id="sendChat" class="btn btn-primary">Send</button>
+        <div class="stack-card">
+            <div class="section-head">
+                <span class="section-title">Bet Slip Desk</span>
+                <span class="live-status-badge">Realtime</span>
+            </div>
+            <div class="live-centre-grid">
+                <div class="live-centre-item">
+                    <div class="live-centre-item__label">Main Board</div>
+                    <div class="live-centre-item__value">Virtuals</div>
+                </div>
+                <div class="live-centre-item">
+                    <div class="live-centre-item__label">Cashier</div>
+                    <div class="live-centre-item__value">M-Pesa Ready</div>
+                </div>
+                <div class="live-centre-item">
+                    <div class="live-centre-item__label">Slip Rule</div>
+                    <div class="live-centre-item__value">Login First</div>
+                </div>
+                <div class="live-centre-item">
+                    <div class="live-centre-item__label">Community</div>
+                    <div class="live-centre-item__value">Timed Chat</div>
+                </div>
+            </div>
+        </div>
+        <div class="chat-box" id="chatBox">
+            <div class="section-head">
+                <span class="section-title">Live Chat</span>
+                <span id="chatCooldownBadge" class="chat-cooldown-badge">Login required</span>
+            </div>
+            <div id="chatAccessHint" class="chat-box__status" data-tone="guest" aria-live="polite">
+                <div class="chat-status-copy">Log in to join the live room. Guests can read messages, but only signed-in users can post and each account can send one message every 2 minutes.</div>
+            </div>
+            <div id="chat-messages" class="messages" aria-live="polite"></div>
+            <div class="chat-input" id="chatComposer">
+                <label class="sr-only" for="chatInput">Type a chat message</label>
+                <input type="text" id="chatInput" placeholder="Login to send a message" maxlength="240" autocomplete="off" aria-describedby="chatAccessHint">
+                <button id="sendChat" class="btn btn-primary" disabled>Send</button>
             </div>
         </div>
         <div class="log-box">
-            <h3>Event Log</h3>
+            <div class="section-head">
+                <span class="section-title">Event Log</span>
+            </div>
             <div id="logs" class="messages"></div>
+        </div>
+        <div class="stack-card promo-stack">
+            <div class="section-head">
+                <span class="section-title">Offers & Boosts</span>
+            </div>
+            <div class="promo-list">
+                <div class="promo-item">
+                    <div class="promo-item__label">Quick Start</div>
+                    <div class="promo-item__copy">Login, save your phone, fund your wallet and move straight into the virtual board.</div>
+                </div>
+                <div class="promo-item">
+                    <div class="promo-item__label">Live Room Rule</div>
+                    <div class="promo-item__copy">Chat unlocks after login and stays on a 2-minute cooldown per account to keep the room tidy.</div>
+                </div>
+            </div>
         </div>
         <div id="leaderboardBox" class="log-box" style="display: none;">
             <h3>Leaderboard</h3>
@@ -2821,62 +3838,6 @@
         <!-- Provably Fair panel removed from side panel; accessible via ground icons -->
     </aside>
 </div>
-
-<!-- Mpesa Professional Forms Section -->
-<div class="mpesa-section" style="max-width: 400px; margin: 2rem auto; background: var(--panel-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 2rem;">
-  <h2 style="text-align:center; color: var(--accent-primary); margin-bottom: 1.5rem;">Mpesa Transactions</h2>
-  <form id="deposit-form" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem;">
-    <label for="deposit-amount" style="color: var(--text-secondary); font-weight: 600;">Deposit Amount:</label>
-    <input type="number" id="deposit-amount" name="deposit-amount" min="1" step="0.01" required style="padding: 0.7rem; border-radius: 8px; border: 1px solid var(--panel-stroke); background: var(--surface-soft); color: var(--text-primary);" />
-    <button type="submit" class="btn btn-success" style="margin-top: 0.5rem;">Deposit</button>
-  </form>
-  <form id="withdrawal-form" style="display: flex; flex-direction: column; gap: 1rem;">
-    <label for="withdrawal-amount" style="color: var(--text-secondary); font-weight: 600;">Withdrawal Amount:</label>
-    <input type="number" id="withdrawal-amount" name="withdrawal-amount" min="1" step="0.01" required style="padding: 0.7rem; border-radius: 8px; border: 1px solid var(--panel-stroke); background: var(--surface-soft); color: var(--text-primary);" />
-    <button type="submit" class="btn btn-orange" style="margin-top: 0.5rem;">Withdraw</button>
-  </form>
-</div>
-<script>
-  document.getElementById('deposit-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const amount = document.getElementById('deposit-amount').value;
-    if (!amount || isNaN(amount) || Number(amount) <= 0) {
-      alert('Please enter a valid deposit amount.');
-      return;
-    }
-    try {
-      const response = await fetch('/api/mpesa/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
-      });
-      const result = await response.json();
-      alert(result.message || 'Deposit request sent.');
-    } catch (err) {
-      alert('Failed to process deposit.');
-    }
-  });
-
-  document.getElementById('withdrawal-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const amount = document.getElementById('withdrawal-amount').value;
-    if (!amount || isNaN(amount) || Number(amount) <= 0) {
-      alert('Please enter a valid withdrawal amount.');
-      return;
-    }
-    try {
-      const response = await fetch('/api/mpesa/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
-      });
-      const result = await response.json();
-      alert(result.message || 'Withdrawal request sent.');
-    } catch (err) {
-      alert('Failed to process withdrawal.');
-    }
-  });
-</script>
 
 <!-- Provably Fair overlay -->
 <div id="fairnessOverlay" class="fairness-overlay" style="display:none;">
@@ -2930,6 +3891,7 @@
     
     
     const AUTH_TOKEN_KEY = 'betting_server_auth_token';
+    const CHAT_COOLDOWN_MS = 2 * 60 * 1000;
     let socket = null;
     let reconnectAttempt = 0;
     let reconnectTimer = null;
@@ -2940,6 +3902,12 @@
     let activeHttpBase = '';
     let authToken = '';
     let currentUser = null;
+    let nextChatAllowedAt = 0;
+    let pendingChatSubmission = false;
+    let chatCooldownTimer = null;
+    let chatHistoryCache = [];
+    let trackedMpesaTransaction = null;
+    let mpesaPollingTimer = null;
     const crashGameKeys = ['aviator', 'jetx', 'spaceman', 'crash', 'balloon'];
     let currentCrashGame = 'aviator';
     const defaultCrashState = () => ({ status: 'waiting', multiplier: 1, gameId: '', paused: false, serverSeedHash: null, nonce: null });
@@ -2969,7 +3937,11 @@
     };
     const elements = {
         logs: $('#logs'),
+        chatBox: $('#chatBox'),
         chatMessages: $('#chat-messages'),
+        chatComposer: $('#chatComposer'),
+        chatAccessHint: $('#chatAccessHint'),
+        chatCooldownBadge: $('#chatCooldownBadge'),
         transactions: $('#transactions'),
         betHistory: $('#betHistory'),
         gameGuide: $('#gameGuide'),
@@ -3018,6 +3990,7 @@
         autoplayTargetInput: $('#autoplayTarget'),
         autoplayCashoutInput: $('#autoplayCashout'),
         chatInput: $('#chatInput'),
+        sendChatBtn: $('#sendChat'),
         loadTransactionsBtn: $('#loadTransactions'),
         loadBetHistoryBtn: $('#loadBetHistory'),
         refreshRoundsBtn: $('#refreshRounds'),
@@ -3041,7 +4014,14 @@
         updatePhoneInput: $('#updatePhone'),
         mpesaPhoneNumber: $('#mpesaPhoneNumber'),
         mpesaPhoneDisplay: $('#mpesaPhoneDisplay'),
+        mpesaPhoneEmpty: $('#mpesaPhoneEmpty'),
         registeredMpesaPhone: $('#registeredMpesaPhone'),
+        mpesaStatusCard: $('#mpesaStatusCard'),
+        mpesaStatusTitle: $('#mpesaStatusTitle'),
+        mpesaStatusMessage: $('#mpesaStatusMessage'),
+        mpesaStatusMeta: $('#mpesaStatusMeta'),
+        depositMpesaBtn: $('#depositMpesa'),
+        withdrawMpesaBtn: $('#withdrawMpesa'),
         saveProfileBtn: $('#saveProfile'),
         oldPasswordInput: $('#oldPassword'),
         newPasswordInput: $('#newPassword'),
@@ -4153,6 +5133,141 @@
         }, 3000);
     }
 
+    function setMpesaStatus(state, title, message, meta = '') {
+        if (elements.mpesaStatusCard) {
+            elements.mpesaStatusCard.dataset.state = state;
+        }
+        if (elements.mpesaStatusTitle) {
+            elements.mpesaStatusTitle.textContent = title;
+        }
+        if (elements.mpesaStatusMessage) {
+            elements.mpesaStatusMessage.textContent = message;
+        }
+        if (elements.mpesaStatusMeta) {
+            elements.mpesaStatusMeta.textContent = meta;
+        }
+    }
+
+    function setMpesaButtonsBusy(isBusy, activeKind = null) {
+        if (!elements.depositMpesaBtn || !elements.withdrawMpesaBtn) {
+            return;
+        }
+        elements.depositMpesaBtn.disabled = isBusy;
+        elements.withdrawMpesaBtn.disabled = isBusy;
+        elements.depositMpesaBtn.textContent = isBusy && activeKind === 'deposit' ? 'Sending STK Push...' : 'Deposit via M-Pesa';
+        elements.withdrawMpesaBtn.textContent = isBusy && activeKind === 'withdrawal' ? 'Processing Withdrawal...' : 'Withdraw to M-Pesa';
+    }
+
+    function syncMpesaPhoneUi(phoneNumber) {
+        const normalizedPhone = typeof phoneNumber === 'string' ? phoneNumber.trim() : '';
+        if (elements.registeredMpesaPhone) {
+            elements.registeredMpesaPhone.textContent = normalizedPhone;
+        }
+        if (elements.mpesaPhoneDisplay) {
+            elements.mpesaPhoneDisplay.style.display = normalizedPhone ? 'block' : 'none';
+        }
+        if (elements.mpesaPhoneEmpty) {
+            elements.mpesaPhoneEmpty.style.display = normalizedPhone ? 'none' : 'block';
+        }
+        if (elements.mpesaPhoneNumber) {
+            elements.mpesaPhoneNumber.placeholder = normalizedPhone
+                ? 'Use a different M-Pesa number for this payment (optional)'
+                : 'M-Pesa phone number (e.g. 0712345678)';
+        }
+    }
+
+    function clearTrackedMpesaTransaction() {
+        trackedMpesaTransaction = null;
+        if (mpesaPollingTimer) {
+            clearInterval(mpesaPollingTimer);
+            mpesaPollingTimer = null;
+        }
+    }
+
+    async function refreshAccountProfile(opts = {}) {
+        if (!authToken) {
+            return null;
+        }
+        try {
+            const account = await apiRequest('/account/me');
+            currentUser = {
+                ...(currentUser || {}),
+                ...account,
+            };
+            elements.userInfo.textContent = account.username;
+            $('#userPhone').textContent = account.phoneNumber || '';
+            elements.updateUsernameInput.value = account.username;
+            elements.updatePhoneInput.value = account.phoneNumber || '';
+            syncMpesaPhoneUi(account.phoneNumber);
+            updateBalance(account.balance);
+            return account;
+        } catch (err) {
+            if (!opts.silent) {
+                showNotification(err.message, 'error');
+            }
+            return null;
+        }
+    }
+
+    async function pollTrackedMpesaTransaction() {
+        if (!trackedMpesaTransaction || !authToken) {
+            return;
+        }
+
+        if (Date.now() - trackedMpesaTransaction.startedAt > 180000) {
+            clearTrackedMpesaTransaction();
+            setMpesaStatus(
+                'pending',
+                'Awaiting Safaricom confirmation',
+                'The request is still pending. Keep your phone close while we wait for the final confirmation.',
+                'If the wallet does not update shortly, refresh transactions or try again in a moment.',
+            );
+            return;
+        }
+
+        const transactions = await loadTransactions({ limit: 20, silent: true });
+        const match = transactions.find((tx) => tx.externalId === trackedMpesaTransaction.externalId);
+        if (!match || match.status === 'pending') {
+            return;
+        }
+
+        const tracked = trackedMpesaTransaction;
+        await refreshAccountProfile({ silent: true });
+        clearTrackedMpesaTransaction();
+
+        if (match.status === 'success') {
+            setMpesaStatus(
+                'success',
+                tracked.kind === 'deposit' ? 'Deposit completed' : 'Withdrawal completed',
+                tracked.kind === 'deposit'
+                    ? 'Your wallet has been credited successfully.'
+                    : 'Your payout has been completed successfully.',
+                `Reference: ${match.externalId || tracked.externalId}`,
+            );
+            return;
+        }
+
+        setMpesaStatus(
+            'error',
+            tracked.kind === 'deposit' ? 'Deposit failed' : 'Withdrawal failed',
+            tracked.kind === 'deposit'
+                ? 'Safaricom did not complete the deposit request.'
+                : 'The withdrawal was not completed and any reserved balance has been restored.',
+            `Reference: ${match.externalId || tracked.externalId}`,
+        );
+    }
+
+    function startMpesaTransactionTracking(details) {
+        clearTrackedMpesaTransaction();
+        trackedMpesaTransaction = {
+            ...details,
+            startedAt: Date.now(),
+        };
+        mpesaPollingTimer = setInterval(() => {
+            void pollTrackedMpesaTransaction();
+        }, 4000);
+    }
+
     function showSystemNotification(notification) {
         const container = document.getElementById('system-notifications');
         const el = document.createElement('div');
@@ -4266,6 +5381,111 @@
         }
     }
 
+    function formatCooldown(ms) {
+        const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        if (minutes <= 0) {
+            return `${seconds}s`;
+        }
+        return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+    }
+
+    function stopChatCooldownTimer() {
+        if (chatCooldownTimer) {
+            clearInterval(chatCooldownTimer);
+            chatCooldownTimer = null;
+        }
+    }
+
+    function syncChatComposerState() {
+        if (!elements.chatInput || !elements.sendChatBtn || !elements.chatAccessHint || !elements.chatCooldownBadge) {
+            return;
+        }
+
+        const isLoggedIn = Boolean(currentUser);
+        const isConnected = Boolean(socket && socket.readyState === 'open');
+        const remainingMs = Math.max(0, nextChatAllowedAt - Date.now());
+        const hasMessage = Boolean(elements.chatInput.value.trim());
+
+        let tone = 'guest';
+        let badge = 'Login required';
+        let message = 'Log in to join the live room. Guests can read messages, but only signed-in users can post and each account can send one message every 2 minutes.';
+        let placeholder = 'Login to send a message';
+        let inputDisabled = true;
+        let buttonDisabled = true;
+
+        if (isLoggedIn && pendingChatSubmission && isConnected) {
+            tone = 'offline';
+            badge = 'Sending';
+            message = 'Sending your message to the live room now.';
+            placeholder = 'Sending your message...';
+        } else if (isLoggedIn && !isConnected) {
+            tone = 'offline';
+            badge = 'Reconnecting';
+            message = 'Realtime is reconnecting. Posting unlocks again as soon as your session is back online.';
+            placeholder = 'Waiting for realtime connection';
+        } else if (isLoggedIn && remainingMs > 0) {
+            tone = 'cooldown';
+            badge = `Next post ${formatCooldown(remainingMs)}`;
+            message = `Message sent. You can post again in ${formatCooldown(remainingMs)}.`;
+            placeholder = `Cooldown active: ${formatCooldown(remainingMs)}`;
+        } else if (isLoggedIn) {
+            tone = 'ready';
+            badge = 'Chat open';
+            message = 'You are signed in. Keep it clear and respectful. Posting is limited to one message every 2 minutes.';
+            placeholder = 'Share a message with the room';
+            inputDisabled = false;
+            buttonDisabled = !hasMessage;
+        }
+
+        document.body.dataset.chatState = tone;
+        elements.chatAccessHint.dataset.tone = tone;
+        elements.chatAccessHint.innerHTML = `<div class="chat-status-copy">${message}</div>`;
+        elements.chatCooldownBadge.textContent = badge;
+        elements.chatInput.placeholder = placeholder;
+        elements.chatInput.disabled = inputDisabled;
+        elements.sendChatBtn.disabled = buttonDisabled;
+    }
+
+    function setNextChatAllowedAt(timestamp) {
+        const numericTimestamp = Number(timestamp);
+        nextChatAllowedAt = Number.isFinite(numericTimestamp) ? numericTimestamp : 0;
+        if (nextChatAllowedAt <= Date.now()) {
+            nextChatAllowedAt = 0;
+            stopChatCooldownTimer();
+            syncChatComposerState();
+            return;
+        }
+
+        stopChatCooldownTimer();
+        chatCooldownTimer = setInterval(() => {
+            if (nextChatAllowedAt <= Date.now()) {
+                nextChatAllowedAt = 0;
+                stopChatCooldownTimer();
+            }
+            syncChatComposerState();
+        }, 1000);
+        syncChatComposerState();
+    }
+
+    function reconcileChatCooldownFromHistory() {
+        if (!currentUser) {
+            setNextChatAllowedAt(0);
+            return;
+        }
+
+        const latestOwnMessage = chatHistoryCache.reduce((latest, entry) => {
+            if (entry?.userId !== currentUser.id) {
+                return latest;
+            }
+            const timestamp = Number(entry.timestamp) || 0;
+            return Math.max(latest, timestamp);
+        }, 0);
+
+        setNextChatAllowedAt(latestOwnMessage ? latestOwnMessage + CHAT_COOLDOWN_MS : 0);
+    }
+
     function addChatMessage({ username, message, timestamp }) {
         const entry = document.createElement('div');
         entry.className = 'chat-message';
@@ -4274,9 +5494,11 @@
     }
 
     function renderChatHistory(messages) {
+        chatHistoryCache = Array.isArray(messages) ? messages.slice(-50) : [];
         elements.chatMessages.innerHTML = '';
         // Messages come in chronological order from server for history
-        messages.forEach(msg => addChatMessage(msg));
+        chatHistoryCache.forEach(msg => addChatMessage(msg));
+        reconcileChatCooldownFromHistory();
     }
 
     function renderList(container, lines, emptyMessage, isHtml = false) {
@@ -4422,12 +5644,15 @@
     function updateUIForLogin(payload, opts = {}) {
         activeMinesGame = payload.activeMinesGame || null;
         activeHiloGame = payload.activeHiloGame || null;
+        document.body.dataset.session = 'member';
+        pendingChatSubmission = false;
         currentUser = {
             id: payload.id,
             username: payload.username,
             role: payload.role,
             status: payload.status,
             phoneNumber: payload.phoneNumber,
+            balance: Number(payload.balance || 0),
         };
 
         elements.authPanel.style.display = 'none';
@@ -4438,16 +5663,7 @@
         
         elements.updateUsernameInput.value = payload.username;
         elements.updatePhoneInput.value = payload.phoneNumber || '';
-
-        // M-Pesa Phone Display Logic
-        if (payload.phoneNumber) {
-            elements.mpesaPhoneNumber.style.display = 'none';
-            elements.mpesaPhoneDisplay.style.display = 'block';
-            elements.registeredMpesaPhone.textContent = payload.phoneNumber;
-        } else {
-            elements.mpesaPhoneNumber.style.display = 'block';
-            elements.mpesaPhoneDisplay.style.display = 'none';
-        }
+        syncMpesaPhoneUi(payload.phoneNumber);
 
         elements.balance.textContent = Number(payload.balance).toFixed(2);
         elements.jwt.value = payload.token || authToken || '';
@@ -4493,6 +5709,8 @@
             loadUsers();
             loadActiveUsers();
         }
+        reconcileChatCooldownFromHistory();
+        syncChatComposerState();
         updateActionAvailability();
     }
 
@@ -4501,12 +5719,25 @@
         if (!Number.isFinite(numeric)) {
             return;
         }
+        if (currentUser) {
+            currentUser.balance = numeric;
+        }
         elements.balance.textContent = numeric.toFixed(2);
     }
 
     function resetSessionView() {
+        clearTrackedMpesaTransaction();
+        setMpesaStatus(
+            'idle',
+            'Ready for payment',
+            'Use your saved M-Pesa number or enter another number, then choose deposit or withdraw.',
+            'Realtime wallet updates will appear here after Safaricom confirms the transaction.',
+        );
+        document.body.dataset.session = 'guest';
         currentUser = null;
+        pendingChatSubmission = false;
         tournaments = [];
+        setNextChatAllowedAt(0);
         crashGameKeys.forEach((key) => {
             activeCrashBets[key] = null;
         });
@@ -4521,7 +5752,15 @@
         elements.profileSettingsCard.style.display = 'none';
         elements.authPanel.style.display = 'block';
         elements.userPanel.style.display = 'none';
+        if (elements.mpesaPhoneNumber) {
+            elements.mpesaPhoneNumber.value = '';
+        }
+        if (elements.chatInput) {
+            elements.chatInput.value = '';
+        }
+        syncMpesaPhoneUi('');
         updateLeaderboardVisibility();
+        syncChatComposerState();
         updateActionAvailability();
         updateGameGuide(currentCrashGame || 'aviator');
     }
@@ -4711,7 +5950,11 @@
             elements.connectionStatus.classList.add('disconnected');
             elements.connectionStatus.textContent = statusText || 'Realtime: Disconnected';
         }
+        if (!connected) {
+            pendingChatSubmission = false;
+        }
         setRealtimeButtonsEnabled(connected);
+        syncChatComposerState();
         updateActionAvailability();
     }
 
@@ -5039,22 +6282,28 @@
         }
     }
 
-    async function loadTransactions() {
+    async function loadTransactions(opts = {}) {
+        const limit = Number.isFinite(Number(opts.limit)) ? Number(opts.limit) : 10;
         if (!authToken) {
             renderList(elements.transactions, [], 'Login to view transactions.');
-            return;
+            return [];
         }
         try {
-            const result = await apiRequest('/transactions/me?limit=10');
-            const rows = result.data.map((tx) => {
+            const result = await apiRequest(`/transactions/me?limit=${limit}`);
+            const transactions = Array.isArray(result.data) ? result.data : [];
+            const rows = transactions.map((tx) => {
                 const amount = Number(tx.amount).toFixed(2);
                 const status = tx.status || 'success';
                 const statusHtml = `<span class="status-badge status-${status}">${status}</span>`;
                 return `${new Date(tx.timestamp).toLocaleTimeString()} | ${tx.type.toUpperCase()} | $${amount} ${statusHtml}`;
             });
-            renderList(elements.transactions, rows, 'No transactions yet.', true); // Use true for HTML support if renderList supports it
+            renderList(elements.transactions, rows, 'No transactions yet.', true);
+            return transactions;
         } catch (err) {
-            showNotification(err.message, 'error');
+            if (!opts.silent) {
+                showNotification(err.message, 'error');
+            }
+            return [];
         }
     }
 
@@ -5497,6 +6746,12 @@
 
             switch(msg.type) {
                 case 'ERROR':
+                    pendingChatSubmission = false;
+                    if (msg.payload?.code === 'RATE_LIMIT_EXCEEDED' && Number(msg.payload?.retryAfterMs) > 0) {
+                        setNextChatAllowedAt(Date.now() + Number(msg.payload.retryAfterMs));
+                    } else {
+                        syncChatComposerState();
+                    }
                     showNotification(msg.payload.message || msg.payload, 'error');
                     if (msg.payload?.code === 'ACCOUNT_BANNED' || msg.payload?.code === 'SESSION_TERMINATED' || msg.payload?.code === 'INVALID_TOKEN') {
                         crashGameKeys.forEach((key) => {
@@ -5616,15 +6871,47 @@
                     loadStats();
                     showNotification('Withdrawal successful!', 'success');
                     break;
+                case 'BALANCE_UPDATE':
+                    updateBalance(msg.payload.balance);
+                    loadTransactions({ silent: true });
+                    loadStats();
+                    if (msg.payload?.message) {
+                        showNotification(
+                            msg.payload.message,
+                            msg.payload.status === 'failed' ? 'error' : 'success',
+                        );
+                    }
+                    if (
+                        trackedMpesaTransaction
+                        && msg.payload?.externalId
+                        && msg.payload.externalId === trackedMpesaTransaction.externalId
+                    ) {
+                        clearTrackedMpesaTransaction();
+                        setMpesaStatus(
+                            msg.payload.status === 'failed' ? 'error' : 'success',
+                            msg.payload.transactionType === 'withdrawal'
+                                ? (msg.payload.status === 'failed' ? 'Withdrawal failed' : 'Withdrawal completed')
+                                : (msg.payload.status === 'failed' ? 'Deposit failed' : 'Deposit completed'),
+                            msg.payload.message || 'Payment update received.',
+                            `Reference: ${msg.payload.externalId}`,
+                        );
+                    }
+                    break;
                 case 'DAILY_BONUS_CLAIMED':
                     updateBalance(msg.payload.newBalance);
                     showNotification(`Daily bonus claimed: +$${msg.payload.amount}`, 'success');
                     break;
                 case 'PROFILE_UPDATED':
+                    currentUser = {
+                        ...(currentUser || {}),
+                        username: msg.payload.username,
+                        phoneNumber: msg.payload.phoneNumber,
+                    };
                     elements.userInfo.textContent = msg.payload.username;
                     $('#userPhone').textContent = msg.payload.phoneNumber || '';
                     elements.updateUsernameInput.value = msg.payload.username;
                     elements.updatePhoneInput.value = msg.payload.phoneNumber || '';
+                    syncMpesaPhoneUi(msg.payload.phoneNumber);
                     showNotification('Profile updated successfully.', 'success');
                     break;
                 case 'PASSWORD_CHANGED':
@@ -5660,6 +6947,16 @@
                     break;
                 case 'CHAT_MESSAGE':
                     addChatMessage(msg.payload);
+                    chatHistoryCache.push(msg.payload);
+                    if (chatHistoryCache.length > 50) {
+                        chatHistoryCache = chatHistoryCache.slice(-50);
+                    }
+                    if (currentUser && msg.payload?.userId === currentUser.id) {
+                        pendingChatSubmission = false;
+                        setNextChatAllowedAt((Number(msg.payload.timestamp) || Date.now()) + CHAT_COOLDOWN_MS);
+                    } else {
+                        syncChatComposerState();
+                    }
                     break;
                 case 'CHAT_HISTORY':
                     renderChatHistory(msg.payload);
@@ -6010,11 +7307,12 @@
     function send(type, payload) {
         if (!socket || socket.readyState !== 'open') {
             showNotification('Realtime connection is not open. Wait a moment and try again.', 'error');
-            return;
+            return false;
         }
         const msg = JSON.stringify({ type, payload });
         debugLog(`SENT: ${msg}`, 'sent');
         socket.send(msg);
+        return true;
     }
 
     async function bootstrapRealtime() {
@@ -6056,6 +7354,7 @@
         applyAutoplayConfig(autoplayConfig);
         applyRiskSettingsToUI(riskSettings);
         renderFairnessCommit(getCurrentCrashState(), currentCrashGame);
+        syncChatComposerState();
         updateLeaderboardVisibility();
         setConnectionState(false, 'Realtime: Discovering server...');
         const sameOriginReady = await useSameOriginBackend();
@@ -6160,49 +7459,110 @@
     });
 
     async function handleMpesaDeposit() {
-        const amountInput = $('#walletAmount');
-        const phoneInput = $('#mpesaPhoneNumber');
-        const amount = parseFloat(amountInput.value);
-        const phoneNumber = phoneInput.style.display === 'none' ? null : phoneInput.value;
+        const amount = parseFloat(elements.walletAmountInput.value);
+        const phoneNumber = elements.mpesaPhoneNumber.value.trim() || null;
+        const defaultPhoneNumber = currentUser?.phoneNumber || null;
 
-        if (!amount || amount <= 0) return showNotification('Please enter a valid amount.', 'error');
+        if (!amount || amount < 10) {
+            return showNotification('Please enter a valid deposit amount of at least KES 10.', 'error');
+        }
+        if (!phoneNumber && !defaultPhoneNumber) {
+            return showNotification('Add an M-Pesa number first so Safaricom can send the STK push.', 'error');
+        }
 
-        console.log(`[Frontend] Initiating M-Pesa Deposit: ${amount} to ${phoneNumber || 'registered number'}`);
+        console.log(`[Frontend] Initiating M-Pesa Deposit: ${amount} to ${phoneNumber || defaultPhoneNumber}`);
+        setMpesaButtonsBusy(true, 'deposit');
+        setMpesaStatus(
+            'pending',
+            'Sending STK push',
+            'We are sending a payment request to your phone now.',
+            'Check your handset and enter your M-Pesa PIN when the Safaricom prompt appears.',
+        );
 
         try {
             const result = await apiRequest('/deposit/mpesa', {
                 method: 'POST',
                 body: { amount, phoneNumber }
             });
-            showNotification(result.message || 'STK Push sent! Please check your phone.', 'success');
+            setMpesaStatus(
+                'pending',
+                'Approve payment on your phone',
+                result.message || 'Check your phone and enter your M-Pesa PIN to complete the deposit.',
+                `Reference: ${result.transactionId}`,
+            );
+            startMpesaTransactionTracking({
+                externalId: result.transactionId,
+                kind: 'deposit',
+            });
+            showNotification('STK push sent. Complete it on your phone.', 'success');
         } catch (err) {
+            clearTrackedMpesaTransaction();
+            setMpesaStatus(
+                'error',
+                'Deposit could not start',
+                err.message,
+                'Confirm the phone number and try again.',
+            );
             showNotification(err.message, 'error');
+        } finally {
+            setMpesaButtonsBusy(false);
         }
     }
 
     async function handleMpesaWithdraw() {
-        const amountInput = $('#walletAmount');
-        const phoneInput = $('#mpesaPhoneNumber');
-        const amount = parseFloat(amountInput.value);
-        const phoneNumber = phoneInput.style.display === 'none' ? null : phoneInput.value;
+        const amount = parseFloat(elements.walletAmountInput.value);
+        const phoneNumber = elements.mpesaPhoneNumber.value.trim() || null;
+        const defaultPhoneNumber = currentUser?.phoneNumber || null;
 
         if (!amount || amount <= 0) return showNotification('Please enter a valid amount.', 'error');
+        if (!phoneNumber && !defaultPhoneNumber) {
+            return showNotification('Add an M-Pesa number first so Safaricom can send the payout.', 'error');
+        }
 
-        console.log(`[Frontend] Initiating M-Pesa Withdrawal: ${amount} to ${phoneNumber || 'registered number'}`);
+        console.log(`[Frontend] Initiating M-Pesa Withdrawal: ${amount} to ${phoneNumber || defaultPhoneNumber}`);
+        setMpesaButtonsBusy(true, 'withdrawal');
+        setMpesaStatus(
+            'pending',
+            'Preparing withdrawal',
+            'We are sending your payout request to Safaricom.',
+            'Your wallet balance is reserved immediately while the payout is being processed.',
+        );
 
         try {
             const result = await apiRequest('/withdraw/mpesa', {
                 method: 'POST',
                 body: { amount, phoneNumber }
             });
+            if (result.newBalance !== undefined) {
+                updateBalance(result.newBalance);
+            }
+            setMpesaStatus(
+                'pending',
+                'Withdrawal submitted',
+                result.message || 'Safaricom is processing the payout request.',
+                `Reference: ${result.transactionId}`,
+            );
+            startMpesaTransactionTracking({
+                externalId: result.transactionId,
+                kind: 'withdrawal',
+            });
             showNotification(result.message || 'Withdrawal request initiated.', 'success');
         } catch (err) {
+            clearTrackedMpesaTransaction();
+            setMpesaStatus(
+                'error',
+                'Withdrawal could not start',
+                err.message,
+                'Confirm your wallet balance and phone number, then try again.',
+            );
             showNotification(err.message, 'error');
+        } finally {
+            setMpesaButtonsBusy(false);
         }
     }
 
-    bind($('#depositMpesa'), 'click', handleMpesaDeposit);
-    bind($('#withdrawMpesa'), 'click', handleMpesaWithdraw);
+    bind(elements.depositMpesaBtn, 'click', handleMpesaDeposit);
+    bind(elements.withdrawMpesaBtn, 'click', handleMpesaWithdraw);
 
     bind(elements.logoutBtn, 'click', () => {
         persistAuthToken('');
@@ -6531,21 +7891,52 @@
     // Sound Toggle
     bind(elements.soundToggleBtn, 'click', () => SoundManager.toggleMute());
 
-    bind($('#sendChat'), 'click', () => {
+    function handleSendChat() {
         if (!elements.chatInput) return;
-        const message = elements.chatInput.value;
-        if (message) {
-            send('CHAT_MESSAGE', { message });
-            elements.chatInput.value = '';
+        const message = elements.chatInput.value.trim();
+        const remainingMs = Math.max(0, nextChatAllowedAt - Date.now());
+
+        if (!currentUser) {
+            syncChatComposerState();
+            showNotification('Login first to send a chat message.', 'error');
+            elements.usernameInput?.focus();
+            return;
         }
-    });
+
+        if (pendingChatSubmission) {
+            syncChatComposerState();
+            return;
+        }
+
+        if (remainingMs > 0) {
+            syncChatComposerState();
+            showNotification(`You can send another message in ${formatCooldown(remainingMs)}.`, 'error');
+            return;
+        }
+
+        if (!message) {
+            syncChatComposerState();
+            return;
+        }
+
+        pendingChatSubmission = true;
+        const sent = send('CHAT_MESSAGE', { message });
+        if (!sent) {
+            pendingChatSubmission = false;
+            syncChatComposerState();
+            return;
+        }
+        elements.chatInput.value = '';
+        syncChatComposerState();
+    }
+
+    bind(elements.sendChatBtn, 'click', handleSendChat);
+    bind(elements.chatInput, 'input', syncChatComposerState);
     bind(elements.chatInput, 'keyup', (e) => {
         if (e.key === 'Enter') {
-            const sendBtn = $('#sendChat');
-            if (sendBtn) sendBtn.click();
+            handleSendChat();
         }
     });
 </script>
 </body>
-    </body>
 </html>

@@ -18,10 +18,23 @@ async function getMpesaAccessToken() {
 }
 
 // Initiate Mpesa Deposit
-export async function initiateMpesaDeposit(amount: number) {
+export async function initiateMpesaDeposit(amount: number, phone: string, callbackUrl: string): Promise<any>;
+export async function initiateMpesaDeposit(amount: number): Promise<any>;
+export async function initiateMpesaDeposit(amount: number, phone?: string, callbackUrl?: string) {
   const accessToken = await getMpesaAccessToken();
   const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   const password = Buffer.from(`${MPESA_SHORTCODE}${MPESA_PASSKEY}${timestamp}`).toString('base64');
+  
+  if (!phone) {
+    throw new Error('Phone number is required for Mpesa deposit.');
+  }
+  if (!callbackUrl) {
+    throw new Error('Callback URL is required for Mpesa deposit.');
+  }
+
+  // Format phone number
+  let formattedPhone = phone.replace(/\D/g, '');
+  if (formattedPhone.startsWith('0')) formattedPhone = `254${formattedPhone.slice(1)}`;
 
   const response = await axios.post(
     `${MPESA_API_URL}/mpesa/stkpush/v1/processrequest`,
@@ -30,11 +43,11 @@ export async function initiateMpesaDeposit(amount: number) {
       Password: password,
       Timestamp: timestamp,
       TransactionType: 'CustomerPayBillOnline',
-      Amount: amount,
-      PartyA: '254700000000', // Replace with user phone number
+      Amount: Math.round(amount),
+      PartyA: formattedPhone, // Replace with user phone number
       PartyB: MPESA_SHORTCODE,
-      PhoneNumber: '254700000000', // Replace with user phone number
-      CallBackURL: 'https://yourdomain.com/api/mpesa/callback',
+      PhoneNumber: formattedPhone, // Replace with user phone number
+      CallBackURL: callbackUrl,
       AccountReference: 'BettingSite',
       TransactionDesc: 'Deposit',
     },
@@ -46,21 +59,36 @@ export async function initiateMpesaDeposit(amount: number) {
 }
 
 // Initiate Mpesa Withdrawal
-export async function initiateMpesaWithdrawal(amount: number) {
+export async function initiateMpesaWithdrawal(amount: number, phone: string, resultUrl: string, timeoutUrl: string): Promise<any>;
+export async function initiateMpesaWithdrawal(amount: number): Promise<any>;
+export async function initiateMpesaWithdrawal(amount: number, phone?: string, resultUrl?: string, timeoutUrl?: string) {
   const accessToken = await getMpesaAccessToken();
+  
+  if (!phone) {
+    throw new Error('Phone number is required for Mpesa withdrawal.');
+  }
+  if (!resultUrl) {
+    throw new Error('Result URL is required for Mpesa withdrawal.');
+  }
+  if (!timeoutUrl) {
+    throw new Error('Timeout URL is required for Mpesa withdrawal.');
+  }
+
+  let formattedPhone = phone.replace(/\D/g, '');
+  if (formattedPhone.startsWith('0')) formattedPhone = `254${formattedPhone.slice(1)}`;
 
   const response = await axios.post(
     `${MPESA_API_URL}/mpesa/b2c/v1/paymentrequest`,
     {
-      InitiatorName: 'apiInitiator',
-      SecurityCredential: 'encryptedCredential',
+      InitiatorName: process.env.MPESA_INITIATOR || 'apiInitiator',
+      SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL || 'encryptedCredential',
       CommandID: 'BusinessPayment',
-      Amount: amount,
+      Amount: Math.round(amount),
       PartyA: MPESA_SHORTCODE,
-      PartyB: '254700000000', // Replace with user phone number
+      PartyB: formattedPhone, // Replace with user phone number
       Remarks: 'Withdrawal',
-      QueueTimeOutURL: 'https://yourdomain.com/api/mpesa/timeout',
-      ResultURL: 'https://yourdomain.com/api/mpesa/result',
+      QueueTimeOutURL: timeoutUrl,
+      ResultURL: resultUrl,
       Occasion: 'Withdrawal',
     },
     {

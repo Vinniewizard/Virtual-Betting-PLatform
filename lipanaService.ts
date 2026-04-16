@@ -15,10 +15,11 @@ export interface LipanaPayoutResponse {
 
 export class LipanaService {
     private apiKey: string;
-    private baseUrl: string = 'https://api.lipana.dev/v1';
+    private baseUrl: string;
 
     constructor(apiKey: string) {
         this.apiKey = apiKey;
+        this.baseUrl = (process.env.LIPANA_BASE_URL || 'https://api.lipana.dev/v1').replace(/\/+$/, '');
     }
 
     private async request(endpoint: string, method: string, body?: any) {
